@@ -34,6 +34,7 @@ const RSS_SOURCES = [
   { url: "https://www.hollywoodreporter.com/c/movies/movie-news/feed/", name: "Hollywood Reporter", focus: "festivaly, rozhovory & awards", lang: "en" },
   { url: "https://www.indiewire.com/c/film/feed/", name: "IndieWire", focus: "indie & autorsky film", lang: "en" },
   { url: "https://www.moviezone.cz/rss/", name: "MovieZone.cz", focus: "ceske trailery & novinky", lang: "cs" },
+  { url: "https://www.screendaily.com/1366.rss", name: "Screen Daily", focus: "evropsky filmovy byznys, festivaly & severske tituly", lang: "en" },
   { url: "https://www.filmneweurope.com/?format=feed&type=rss", name: "Film New Europe", focus: "nove evropske filmy & regionalni produkce", lang: "en" },
 ] as const;
 
@@ -426,7 +427,7 @@ const getRawNewsFeed = unstable_cache(
         })
     ).slice(0, RAW_NEWS_LIMIT);
   },
-  ["raw-news-feed-v1"],
+  ["raw-news-feed-v2"],
   { revalidate: 1800 }
 );
 
@@ -473,7 +474,7 @@ const getCachedNewsPage = unstable_cache(
       total: allArticles.length,
     };
   },
-  ["news-page-v1"],
+  ["news-page-v2"],
   { revalidate: 1800 }
 );
 

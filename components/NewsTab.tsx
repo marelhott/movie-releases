@@ -168,6 +168,7 @@ const SOURCE_BADGE: Record<string, string> = {
   "Hollywood Reporter": "bg-purple-900/80 text-purple-300",
   "IndieWire": "bg-blue-900/80 text-blue-300",
   "MovieZone.cz": "bg-emerald-900/80 text-emerald-300",
+  "Screen Daily": "bg-amber-900/80 text-amber-300",
   "Variety": "bg-orange-900/80 text-orange-300",
 };
 
@@ -364,7 +365,7 @@ export default function NewsTab() {
       {error && <div className="py-12 text-center text-red-400">{error}</div>}
 
       {loadingInitial && articles.length === 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 9 }).map((_, index) => (
             <div key={index} className="overflow-hidden rounded-2xl bg-zinc-900">
               <div className="aspect-video animate-pulse bg-zinc-800" />
@@ -379,7 +380,7 @@ export default function NewsTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredArticles.map((article) => (
           <NewsCard key={article.link} article={article} onClick={() => setSelected(article)} />
         ))}
