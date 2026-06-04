@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { fetchSrrdb, fetchPredb, fetchScnsrcScene } from "@/lib/sceneSources";
+import Anthropic from "@anthropic-ai/sdk";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-const getKeys = () => ({ tmdb: process.env.TMDB_API_KEY, omdb: process.env.OMDB_API_KEY });
+const getKeys = () => ({
+  tmdb: process.env.TMDB_API_KEY,
+  omdb: process.env.OMDB_API_KEY,
+  anthropic: process.env.MOVIE_ANTHROPIC_KEY,
+});
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
 
@@ -73,6 +78,56 @@ async function searchTMDB(title: string, year: number): Promise<any> {
   } catch { return null; }
 }
 
+// Fetch English TMDB overview as fallback
+async function getTMDBDetailEN(tmdbId: number): Promise<string> {
+  if (!getKeys().tmdb || !tmdbId) return "";
+  try {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${getKeys().tmdb}&language=en`,
+      { next: { revalidate: 86400 } }
+    );
+    const data = await res.json();
+    return data.overview ?? "";
+  } catch { return ""; }
+}
+
+// Translate or generate Czech overview via Claude
+async function getCzechOverview(
+  tmdbId: number, csOverview: string, title: string,
+  genres: string[], director: string | null
+): Promise<string> {
+  // Czech overview exists and is meaningful
+  if (csOverview && csOverview.length > 30) return csOverview;
+
+  const enOverview = await getTMDBDetailEN(tmdbId);
+
+  const key = getKeys().anthropic;
+  if (!key) return enOverview || "";
+
+  try {
+    const client = new Anthropic({ apiKey: key });
+
+    if (enOverview && enOverview.length > 20) {
+      // Translate English overview to Czech
+      const msg = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        messages: [{ role: "user", content: `Přelož tento popis filmu "${title}" do češtiny. Zachovej filmový jazyk, max 4 věty. Vrať POUZE přeložený text:\n\n${enOverview}` }],
+      });
+      const translated = msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
+      if (translated.length > 20) return translated;
+    }
+
+    // No overview anywhere — generate from metadata
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      messages: [{ role: "user", content: `Napiš stručný popis (2-3 věty) pro film "${title}"${director ? ` od režiséra ${director}` : ""}${genres.length ? `, žánr: ${genres.join(", ")}` : ""}. Piš česky, filmovým stylem. Vrať POUZE popis.` }],
+    });
+    return msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
+  } catch { return enOverview || ""; }
+}
+
 async function fetchOMDB(imdbId: string) {
   if (!getKeys().omdb || !imdbId) return null;
   try {
@@ -131,11 +186,22 @@ async function normalise(entry: any): Promise<any | null> {
     const backdrop = tmdb?.backdrop_path
       ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` : null;
 
-    const overview = tmdb?.overview?.length > 10 ? tmdb.overview : null;
+    const { cast, director } = buildCast(tmdb);
+    const genres = tmdb?.genres?.map((g: any) => g.name) ?? ytsRaw?.genres ?? [];
+
+    // Always get a Czech overview — fallback EN→CS translation or Claude generation
+    const overview = tmdb?.id
+      ? await getCzechOverview(
+          tmdb.id,
+          tmdb?.overview ?? "",
+          ytsRaw?.title ?? tmdb?.original_title ?? entry._title,
+          genres,
+          director?.name ?? null
+        )
+      : (tmdb?.overview ?? null);
+
     const ytsRating = ytsRaw?.rating ?? 0;
     const imdbRating = ytsRating > 0 ? ytsRating : parseFloat(omdb?.imdbRating ?? "0") || null;
-
-    const { cast, director } = buildCast(tmdb);
 
     const sceneSource = ["srrdb", "predb", "scnsrc"].includes(entry._source) ? entry._source : null;
 
@@ -146,7 +212,7 @@ async function normalise(entry: any): Promise<any | null> {
       czech_title: (tmdb?.title && tmdb.title !== (ytsRaw?.title ?? entry._title)) ? tmdb.title : null,
       year: ytsRaw?.year ?? entry._year ?? (tmdb?.release_date ? parseInt(tmdb.release_date) : 0),
       runtime: tmdb?.runtime ?? ytsRaw?.runtime ?? 0,
-      genres: tmdb?.genres?.map((g: any) => g.name) ?? ytsRaw?.genres ?? [],
+      genres,
       overview,
       poster,
       backdrop,
