@@ -19,10 +19,10 @@ export default function MovieGrid() {
       const res = await fetch(`/api/movies?page=${p}`);
       if (!res.ok) throw new Error("Chyba při načítání filmů");
       const data = await res.json();
-      if (data.movies.length === 0) {
+      if (!data.movies?.length) {
         setHasMore(false);
       } else {
-        setMovies((prev) => (p === 1 ? data.movies : [...prev, ...data.movies]));
+        setMovies(prev => p === 1 ? data.movies : [...prev, ...data.movies]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Neznámá chyba");
@@ -31,43 +31,23 @@ export default function MovieGrid() {
     }
   }, []);
 
-  useEffect(() => {
-    loadMovies(1);
-  }, [loadMovies]);
-
-  const loadMore = () => {
-    const next = page + 1;
-    setPage(next);
-    loadMovies(next);
-  };
+  useEffect(() => { loadMovies(1); }, [loadMovies]);
 
   return (
     <div>
-      {error && (
-        <div className="text-center py-12 text-red-400">{error}</div>
-      )}
+      {error && <div className="text-center py-12 text-red-400">{error}</div>}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {movies.map((movie) => (
-          <MovieCard key={movie.id} movie={movie} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
+        {movies.map(movie => <MovieCard key={`${movie.id}-${movie.imdb_code}`} movie={movie} />)}
+        {loading && Array.from({ length: 14 }).map((_, i) => (
+          <div key={`sk-${i}`} className="rounded-xl overflow-hidden bg-zinc-800 animate-pulse aspect-[2/3]" />
         ))}
-
-        {/* Skeleton while loading */}
-        {loading &&
-          Array.from({ length: 12 }).map((_, i) => (
-            <div
-              key={`skel-${i}`}
-              className="rounded-xl overflow-hidden bg-zinc-800 animate-pulse aspect-[2/3]"
-            />
-          ))}
       </div>
 
       {!loading && hasMore && movies.length > 0 && (
         <div className="flex justify-center mt-10">
-          <button
-            onClick={loadMore}
-            className="px-8 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition-colors"
-          >
+          <button onClick={() => { const n = page + 1; setPage(n); loadMovies(n); }}
+            className="px-8 py-3 rounded-xl bg-zinc-800 text-white font-medium hover:bg-zinc-700 transition-colors">
             Načíst další
           </button>
         </div>

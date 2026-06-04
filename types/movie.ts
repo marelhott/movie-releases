@@ -12,11 +12,17 @@ export interface Torrent {
   seeds: number;
 }
 
+export interface CastMember {
+  id: number;
+  name: string;
+  character: string;
+  photo: string | null;
+}
+
 export interface Movie {
   id: number;
   imdb_code: string;
   title: string;
-  title_long: string;
   czech_title: string | null;
   year: number;
   runtime: number;
@@ -25,10 +31,9 @@ export interface Movie {
   poster: string;
   backdrop: string | null;
   ratings: MovieRatings;
-  cast: string[];
-  director: string | null;
-  date_uploaded: string;
-  scene_confirmed?: boolean;
-  source?: string;
+  cast: CastMember[];
+  director: { id: number; name: string; photo: string | null } | null;
+  date_added: string;
+  sources: string[];
   torrents: Torrent[];
 }
