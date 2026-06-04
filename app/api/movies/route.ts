@@ -310,21 +310,6 @@ function getRawEntryKey(entry: any) {
   return `title:${String(entry?._title ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")}:${entry?._year ?? 0}`;
 }
 
-function getRawEntryPriority(entry: any) {
-  switch (entry?._source) {
-    case "yts":
-      return 4;
-    case "tmdb":
-      return 3;
-    case "srrdb":
-    case "predb":
-    case "scnsrc":
-      return 2;
-    default:
-      return 1;
-  }
-}
-
 function deduplicateRawEntries(entries: any[]) {
   const map = new Map<string, any>();
 
@@ -340,9 +325,8 @@ function deduplicateRawEntries(entries: any[]) {
     }
 
     const mergedSources = Array.from(new Set([...(existing._sources ?? [existing._source]), entry._source]));
-    const preferred = getRawEntryPriority(entry) > getRawEntryPriority(existing) ? entry : existing;
     map.set(key, {
-      ...preferred,
+      ...existing,
       _sources: mergedSources,
     });
   }
@@ -393,7 +377,7 @@ const getCachedMoviesPage = unstable_cache(
 
     return { movies, page };
   },
-  ["movies-page-v2"],
+  ["movies-page-v3"],
   { revalidate: 1800 }
 );
 
