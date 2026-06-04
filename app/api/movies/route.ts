@@ -352,13 +352,11 @@ function deduplicateRawEntries(entries: any[]) {
 
 const getCachedMoviesPage = unstable_cache(
   async (page: number) => {
-    const [yts, nowPlaying, upcoming, popular, trending, srrdb, predb, scnsrc] =
+    const [yts, nowPlaying, upcoming, srrdb, predb, scnsrc] =
       await Promise.all([
         fetchYTS(page),
         page === 1 ? fetchTMDBSection("movie/now_playing") : Promise.resolve([]),
         page === 1 ? fetchTMDBSection("movie/upcoming") : Promise.resolve([]),
-        fetchTMDBSection("movie/popular"),
-        page === 1 ? fetchTMDBSection("trending/movie/week") : Promise.resolve([]),
         page === 1 ? fetchSrrdb() : Promise.resolve([]),
         page === 1 ? fetchPredb() : Promise.resolve([]),
         page === 1 ? fetchScnsrcScene() : Promise.resolve([]),
@@ -379,8 +377,6 @@ const getCachedMoviesPage = unstable_cache(
       ...yts,
       ...nowPlaying,
       ...upcoming,
-      ...popular,
-      ...trending,
       ...sceneEntries,
     ]);
 
@@ -397,7 +393,7 @@ const getCachedMoviesPage = unstable_cache(
 
     return { movies, page };
   },
-  ["movies-page-v1"],
+  ["movies-page-v2"],
   { revalidate: 1800 }
 );
 
