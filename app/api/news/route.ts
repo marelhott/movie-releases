@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
 import Anthropic from "@anthropic-ai/sdk";
 
+// force-dynamic so Next.js doesn't try to static-render this route
+// CDN caching is handled via Cache-Control headers instead
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Vercel max timeout
 
 // Keys — NOT ANTHROPIC_API_KEY (overridden to "" by Claude Code shell env)
 const getKeys = () => ({
@@ -249,9 +252,11 @@ async function fetchTMDBTrending(): Promise<NewsArticle[]> {
 export async function GET(req: Request) {
   const force = new URL(req.url).searchParams.get("refresh") === "1";
 
-  // Serve from cache if fresh
+  // Local in-memory cache (works for single-instance / dev)
   if (_cache && !force && Date.now() - _cache.ts < CACHE_TTL) {
-    return NextResponse.json({ ..._cache.data, cached: true });
+    return NextResponse.json({ ..._cache.data, cached: true }, {
+      headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
+    });
   }
 
   // Fetch all RSS + TMDB in parallel
@@ -280,5 +285,9 @@ export async function GET(req: Request) {
   const data = { articles, trending };
   _cache = { data, ts: Date.now() };
 
-  return NextResponse.json(data);
+  // s-maxage=1800 → Vercel CDN cachuje 30 min
+  // stale-while-revalidate=3600 → CDN servíruje stale a revaliduje na pozadí
+  return NextResponse.json(data, {
+    headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
+  });
 }

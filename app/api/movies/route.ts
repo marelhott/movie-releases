@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchSrrdb, fetchPredb, fetchScnsrcScene } from "@/lib/sceneSources";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 const getKeys = () => ({ tmdb: process.env.TMDB_API_KEY, omdb: process.env.OMDB_API_KEY });
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
@@ -238,5 +239,7 @@ export async function GET(request: Request) {
     .filter(m => m.poster)
     .slice(0, 50);
 
-  return NextResponse.json({ movies, page });
+  return NextResponse.json({ movies, page }, {
+    headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
+  });
 }
