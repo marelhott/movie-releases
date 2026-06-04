@@ -35,6 +35,16 @@ interface NewsResponse {
 }
 
 const PAGE_SIZE = 30;
+const SOURCE_FILTERS = [
+  "vse",
+  "Deadline",
+  "Variety",
+  "Hollywood Reporter",
+  "IndieWire",
+  "Screen Daily",
+  "Film New Europe",
+  "MovieZone.cz",
+] as const;
 
 function timeAgo(value: string) {
   if (!value) return "";
@@ -319,10 +329,6 @@ export default function NewsTab() {
     return () => observer.disconnect();
   }, [loadNextPage]);
 
-  const sources = articles.length > 0
-    ? ["vse", ...Array.from(new Set(articles.map((article) => article.source)))]
-    : [];
-
   const filteredArticles = articles.filter((article) => filter === "vse" || article.source === filter);
 
   return (
@@ -346,9 +352,9 @@ export default function NewsTab() {
         </button>
       </div>
 
-      {sources.length > 1 && (
+      {SOURCE_FILTERS.length > 1 && (
         <div className="mb-5 flex flex-wrap gap-2">
-          {sources.map((source) => (
+          {SOURCE_FILTERS.map((source) => (
             <button
               key={source}
               onClick={() => setFilter(source)}
