@@ -3,8 +3,13 @@ import { XMLParser } from "fast-xml-parser";
 import Anthropic from "@anthropic-ai/sdk";
 import { unstable_cache } from "next/cache";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
+export const revalidate = 1800;
 export const maxDuration = 60;
+
+const RSS_ITEMS_PER_SOURCE = 6;
+const OG_IMAGE_FALLBACK_LIMIT = 8;
+const ALLOWED_PERSON_DEPARTMENTS = new Set(["Acting", "Directing"]);
 
 const getKeys = () => ({
   tmdb: process.env.TMDB_API_KEY,
@@ -92,7 +97,7 @@ async function fetchRSS(source: typeof RSS_SOURCES[0]): Promise<RawArticle[]> {
     const parsed = parser.parse(xml);
     const items = parsed?.rss?.channel?.item ?? parsed?.feed?.entry ?? [];
     const arr = Array.isArray(items) ? items : [items];
-    return arr.slice(0, 6).map((item: any) => {
+    return arr.slice(0, RSS_ITEMS_PER_SOURCE).map((item: any) => {
       const titleRaw = item.title?.["__cdata"] ?? item.title ?? "";
       const desc = item.description?.["__cdata"] ?? item.description ?? item.summary?.["__cdata"] ?? item.summary ?? "";
       const full = item["content:encoded"]?.["__cdata"] ?? item["content:encoded"] ?? desc;
@@ -106,6 +111,17 @@ async function fetchRSS(source: typeof RSS_SOURCES[0]): Promise<RawArticle[]> {
       };
     }).filter(a => a.title && a.link);
   } catch { clearTimeout(t); return []; }
+}
+
+function buildFallbackBody(article: RawArticle): string {
+  if (article.description) return article.description;
+  if (article.link.includes("/trailery")) {
+    return `${article.source} přinesl nový trailer k titulu ${article.title}.`;
+  }
+  if (article.link.includes("/recenze")) {
+    return `${article.source} zveřejnil recenzi k titulu ${article.title}.`;
+  }
+  return `${article.source} přinesl novou zprávu ze světa filmu k tématu ${article.title}.`;
 }
 
 function deduplicate(articles: RawArticle[]): RawArticle[] {
@@ -143,6 +159,7 @@ async function findPersonByName(name: string, tmdbKey: string): Promise<PersonSn
     const searchData = await searchRes.json();
     const person = searchData.results?.[0];
     if (!person) return null;
+    if (!ALLOWED_PERSON_DEPARTMENTS.has(person.known_for_department ?? "")) return null;
 
     const creditsRes = await fetch(
       `https://api.themoviedb.org/3/person/${person.id}/movie_credits?api_key=${tmdbKey}&language=cs`,
@@ -150,9 +167,15 @@ async function findPersonByName(name: string, tmdbKey: string): Promise<PersonSn
     );
     const credits = await creditsRes.json();
 
+    const seenFilmIds = new Set<number>();
     const topFilms = [...(credits.crew ?? []).filter((c: any) => c.job === "Director"),
                       ...(credits.cast ?? [])]
       .sort((a: any, b: any) => (b.vote_count ?? 0) - (a.vote_count ?? 0))
+      .filter((f: any) => {
+        if (!f?.id || seenFilmIds.has(f.id)) return false;
+        seenFilmIds.add(f.id);
+        return true;
+      })
       .slice(0, 5)
       .map((f: any) => ({
         title: f.title ?? f.original_title,
@@ -169,6 +192,12 @@ async function findPersonByName(name: string, tmdbKey: string): Promise<PersonSn
     };
   } catch { return null; }
 }
+
+const getCachedPersonByName = unstable_cache(
+  async (name: string, tmdbKey: string) => findPersonByName(name, tmdbKey),
+  ["news-person-by-name-v1"],
+  { revalidate: 86400 }
+);
 
 // ── Claude: generate article + detect filmmaker ───────────────────────────────
 async function generateArticles(
@@ -192,7 +221,7 @@ ${JSON.stringify(payload)}`;
 
   try {
     const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001", max_tokens: 5000,
+      model: "claude-haiku-4-5-20251001", max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
     const raw = (msg.content[0].type === "text" ? msg.content[0].text : "")
@@ -205,7 +234,7 @@ ${JSON.stringify(payload)}`;
 
     // Fetch person data for detected filmmakers in parallel
     const personFetches = generated.map(g =>
-      g.person_name ? findPersonByName(g.person_name, tmdbKey) : Promise.resolve(null)
+      g.person_name ? getCachedPersonByName(g.person_name, tmdbKey) : Promise.resolve(null)
     );
     const persons = await Promise.all(personFetches);
 
@@ -213,8 +242,8 @@ ${JSON.stringify(payload)}`;
       const g = generated.find(x => x.i === idx);
       const person = persons[generated.findIndex(x => x.i === idx)] ?? undefined;
       return {
-        title_cs: g?.title_cs ?? a.title,
-        body_cs: g?.body_cs ?? a.description,
+        title_cs: g?.title_cs?.trim() || a.title,
+        body_cs: g?.body_cs?.trim() || buildFallbackBody(a),
         title_en: a.title, link: a.link, pubDate: a.pubDate,
         source: a.source, focus: a.focus, image: a.image,
         person: person ?? undefined,
@@ -222,7 +251,7 @@ ${JSON.stringify(payload)}`;
     });
   } catch {
     return articles.map(a => ({
-      title_cs: a.title, body_cs: a.description, title_en: a.title,
+      title_cs: a.title, body_cs: buildFallbackBody(a), title_en: a.title,
       link: a.link, pubDate: a.pubDate, source: a.source, focus: a.focus, image: a.image,
     }));
   }
@@ -279,13 +308,13 @@ const fetchNewsData = unstable_cache(
     ).slice(0, 24);
 
     // OG image fallback for articles without image
-    const missing = sorted.filter(a => !a.image).slice(0, 8);
+    const missing = sorted.filter(a => !a.image).slice(0, OG_IMAGE_FALLBACK_LIMIT);
     const ogImages = await Promise.all(missing.map(a => fetchOGImage(a.link)));
     missing.forEach((a, i) => { if (ogImages[i]) a.image = ogImages[i]; });
 
     // Generate articles with Claude in 2 parallel batches
     let articles: NewsArticle[] = sorted.map(a => ({
-      title_cs: a.title, body_cs: a.description, title_en: a.title,
+      title_cs: a.title, body_cs: buildFallbackBody(a), title_en: a.title,
       link: a.link, pubDate: a.pubDate, source: a.source, focus: a.focus, image: a.image,
     }));
 

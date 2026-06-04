@@ -1,14 +1,23 @@
 import { NextResponse } from "next/server";
 import { fetchSrrdb, fetchPredb, fetchScnsrcScene } from "@/lib/sceneSources";
 import Anthropic from "@anthropic-ai/sdk";
+import { unstable_cache } from "next/cache";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "auto";
 export const maxDuration = 60;
 const getKeys = () => ({
   tmdb: process.env.TMDB_API_KEY,
   omdb: process.env.OMDB_API_KEY,
   anthropic: process.env.MOVIE_ANTHROPIC_KEY,
 });
+
+const MOVIES_PAGE_LIMIT = 50;
+const NORMALIZE_BATCH_SIZE = 8;
+const NORMALIZE_TARGET_COUNT = 60;
+
+function hasConfiguredKey(value: string | undefined) {
+  return Boolean(value && !value.includes("your_") && !value.includes("here"));
+}
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
 
@@ -26,7 +35,7 @@ async function fetchYTS(page = 1) {
 }
 
 async function fetchTMDBSection(endpoint: string) {
-  if (!getKeys().tmdb) return [];
+  if (!hasConfiguredKey(getKeys().tmdb)) return [];
   try {
     const pages = await Promise.all([1, 2].map(p =>
       fetch(`https://api.themoviedb.org/3/${endpoint}?api_key=${getKeys().tmdb}&language=cs&region=CZ&page=${p}`,
@@ -42,7 +51,7 @@ async function fetchTMDBSection(endpoint: string) {
 // ── TMDB enrichment ──────────────────────────────────────────────────────────
 
 async function getTMDBDetail(tmdbId: number): Promise<any> {
-  if (!getKeys().tmdb || !tmdbId) return null;
+  if (!hasConfiguredKey(getKeys().tmdb) || !tmdbId) return null;
   try {
     const res = await fetch(
       `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${getKeys().tmdb}&language=cs&append_to_response=credits,external_ids`,
@@ -53,7 +62,7 @@ async function getTMDBDetail(tmdbId: number): Promise<any> {
 }
 
 async function findTMDBByIMDB(imdbId: string): Promise<any> {
-  if (!getKeys().tmdb || !imdbId?.startsWith("tt")) return null;
+  if (!hasConfiguredKey(getKeys().tmdb) || !imdbId?.startsWith("tt")) return null;
   try {
     const res = await fetch(
       `https://api.themoviedb.org/3/find/${imdbId}?api_key=${getKeys().tmdb}&external_source=imdb_id`,
@@ -66,7 +75,7 @@ async function findTMDBByIMDB(imdbId: string): Promise<any> {
 }
 
 async function searchTMDB(title: string, year: number): Promise<any> {
-  if (!getKeys().tmdb || !title) return null;
+  if (!hasConfiguredKey(getKeys().tmdb) || !title) return null;
   try {
     const res = await fetch(
       `https://api.themoviedb.org/3/search/movie?api_key=${getKeys().tmdb}&query=${encodeURIComponent(title)}&year=${year || ""}&language=cs`,
@@ -80,7 +89,7 @@ async function searchTMDB(title: string, year: number): Promise<any> {
 
 // Fetch English TMDB overview as fallback
 async function getTMDBDetailEN(tmdbId: number): Promise<string> {
-  if (!getKeys().tmdb || !tmdbId) return "";
+  if (!hasConfiguredKey(getKeys().tmdb) || !tmdbId) return "";
   try {
     const res = await fetch(
       `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${getKeys().tmdb}&language=en`,
@@ -102,7 +111,7 @@ async function getCzechOverview(
   const enOverview = await getTMDBDetailEN(tmdbId);
 
   const key = getKeys().anthropic;
-  if (!key) return enOverview || "";
+  if (!hasConfiguredKey(key)) return enOverview || "";
 
   try {
     const client = new Anthropic({ apiKey: key });
@@ -129,13 +138,49 @@ async function getCzechOverview(
 }
 
 async function fetchOMDB(imdbId: string) {
-  if (!getKeys().omdb || !imdbId) return null;
+  if (!hasConfiguredKey(getKeys().omdb) || !imdbId) return null;
   try {
     const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${getKeys().omdb}`,
       { next: { revalidate: 86400 } });
     return res.json();
   } catch { return null; }
 }
+
+const getCachedTMDBDetail = unstable_cache(
+  async (tmdbId: number) => getTMDBDetail(tmdbId),
+  ["movie-tmdb-detail-v1"],
+  { revalidate: 86400 }
+);
+
+const getCachedTMDBByIMDB = unstable_cache(
+  async (imdbId: string) => findTMDBByIMDB(imdbId),
+  ["movie-find-by-imdb-v1"],
+  { revalidate: 86400 }
+);
+
+const getCachedTMDBSearch = unstable_cache(
+  async (title: string, year: number) => searchTMDB(title, year),
+  ["movie-search-v1"],
+  { revalidate: 86400 }
+);
+
+const getCachedOverview = unstable_cache(
+  async (
+    tmdbId: number,
+    csOverview: string,
+    title: string,
+    genres: string[],
+    director: string | null
+  ) => getCzechOverview(tmdbId, csOverview, title, genres, director),
+  ["movie-overview-v1"],
+  { revalidate: 86400 }
+);
+
+const getCachedOMDB = unstable_cache(
+  async (imdbId: string) => fetchOMDB(imdbId),
+  ["movie-omdb-v1"],
+  { revalidate: 86400 }
+);
 
 // ── Build cast + director with photos ────────────────────────────────────────
 
@@ -167,17 +212,17 @@ async function normalise(entry: any): Promise<any | null> {
 
     if (entry._source === "yts") {
       ytsRaw = entry._raw;
-      tmdb = imdbCode ? await findTMDBByIMDB(imdbCode) : await searchTMDB(entry._title, entry._year);
+      tmdb = imdbCode ? await getCachedTMDBByIMDB(imdbCode) : await getCachedTMDBSearch(entry._title, entry._year);
     } else if (entry._source === "tmdb") {
-      tmdb = await getTMDBDetail(entry._tmdb_id ?? entry._raw.id);
+      tmdb = await getCachedTMDBDetail(entry._tmdb_id ?? entry._raw.id);
       imdbCode = tmdb?.external_ids?.imdb_id ?? "";
     } else {
       // scene / letterboxd
-      tmdb = await searchTMDB(entry._title, entry._year);
+      tmdb = await getCachedTMDBSearch(entry._title, entry._year);
       imdbCode = tmdb?.external_ids?.imdb_id ?? "";
     }
 
-    const omdb = imdbCode ? await fetchOMDB(imdbCode) : null;
+    const omdb = imdbCode ? await getCachedOMDB(imdbCode) : null;
 
     const poster = tmdb?.poster_path
       ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}`
@@ -191,7 +236,7 @@ async function normalise(entry: any): Promise<any | null> {
 
     // Always get a Czech overview — fallback EN→CS translation or Claude generation
     const overview = tmdb?.id
-      ? await getCzechOverview(
+      ? await getCachedOverview(
           tmdb.id,
           tmdb?.overview ?? "",
           ytsRaw?.title ?? tmdb?.original_title ?? entry._title,
@@ -225,7 +270,7 @@ async function normalise(entry: any): Promise<any | null> {
       cast,
       director,
       date_added: ytsRaw?.date_uploaded ?? tmdb?.release_date ?? new Date().toISOString(),
-      sources: [entry._source, ...(sceneSource ? [sceneSource] : [])],
+      sources: entry._sources ?? [entry._source, ...(sceneSource ? [sceneSource] : [])],
       torrents: ytsRaw?.torrents?.map((t: any) => ({
         quality: t.quality, type: t.type, size: t.size, seeds: t.seeds,
       })) ?? [],
@@ -260,52 +305,109 @@ function deduplicate(entries: any[]): any[] {
   return result;
 }
 
+function getRawEntryKey(entry: any) {
+  if (entry?._imdb?.startsWith("tt")) return `imdb:${entry._imdb}`;
+  return `title:${String(entry?._title ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")}:${entry?._year ?? 0}`;
+}
+
+function getRawEntryPriority(entry: any) {
+  switch (entry?._source) {
+    case "yts":
+      return 4;
+    case "tmdb":
+      return 3;
+    case "srrdb":
+    case "predb":
+    case "scnsrc":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+function deduplicateRawEntries(entries: any[]) {
+  const map = new Map<string, any>();
+
+  for (const entry of entries) {
+    const key = getRawEntryKey(entry);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        ...entry,
+        _sources: [entry._source],
+      });
+      continue;
+    }
+
+    const mergedSources = Array.from(new Set([...(existing._sources ?? [existing._source]), entry._source]));
+    const preferred = getRawEntryPriority(entry) > getRawEntryPriority(existing) ? entry : existing;
+    map.set(key, {
+      ...preferred,
+      _sources: mergedSources,
+    });
+  }
+
+  return Array.from(map.values());
+}
+
+const getCachedMoviesPage = unstable_cache(
+  async (page: number) => {
+    const [yts, nowPlaying, upcoming, popular, trending, srrdb, predb, scnsrc] =
+      await Promise.all([
+        fetchYTS(page),
+        page === 1 ? fetchTMDBSection("movie/now_playing") : Promise.resolve([]),
+        page === 1 ? fetchTMDBSection("movie/upcoming") : Promise.resolve([]),
+        fetchTMDBSection("movie/popular"),
+        page === 1 ? fetchTMDBSection("trending/movie/week") : Promise.resolve([]),
+        page === 1 ? fetchSrrdb() : Promise.resolve([]),
+        page === 1 ? fetchPredb() : Promise.resolve([]),
+        page === 1 ? fetchScnsrcScene() : Promise.resolve([]),
+      ]);
+
+    const toEntry = (s: any, src: string) => ({
+      _source: src, _imdb: s.imdbId ? `tt${s.imdbId}` : null,
+      _title: s.title, _year: s.year, _raw: s,
+    });
+
+    const sceneEntries = [
+      ...srrdb.map((s: any) => toEntry(s, "srrdb")),
+      ...predb.map((s: any) => toEntry(s, "predb")),
+      ...scnsrc.map((s: any) => toEntry(s, "scnsrc")),
+    ];
+
+    const dedupedRaw = deduplicateRawEntries([
+      ...yts,
+      ...nowPlaying,
+      ...upcoming,
+      ...popular,
+      ...trending,
+      ...sceneEntries,
+    ]);
+
+    const normalised: any[] = [];
+    for (let i = 0; i < dedupedRaw.length; i += NORMALIZE_BATCH_SIZE) {
+      const batch = await Promise.all(dedupedRaw.slice(i, i + NORMALIZE_BATCH_SIZE).map(normalise));
+      normalised.push(...batch.filter(Boolean));
+      if (normalised.length >= NORMALIZE_TARGET_COUNT) break;
+    }
+
+    const movies = deduplicate(normalised)
+      .filter(m => m.poster)
+      .slice(0, MOVIES_PAGE_LIMIT);
+
+    return { movies, page };
+  },
+  ["movies-page-v1"],
+  { revalidate: 1800 }
+);
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get("page") ?? "1");
-
-  const [yts, nowPlaying, upcoming, popular, trending, srrdb, predb, scnsrc] =
-    await Promise.all([
-      fetchYTS(page),
-      page === 1 ? fetchTMDBSection("movie/now_playing") : Promise.resolve([]),
-      page === 1 ? fetchTMDBSection("movie/upcoming") : Promise.resolve([]),
-      fetchTMDBSection("movie/popular"),
-      page === 1 ? fetchTMDBSection("trending/movie/week") : Promise.resolve([]),
-      page === 1 ? fetchSrrdb() : Promise.resolve([]),
-      page === 1 ? fetchPredb() : Promise.resolve([]),
-      page === 1 ? fetchScnsrcScene() : Promise.resolve([]),
-    ]);
-
-  // Convert scene releases to unified format
-  const toEntry = (s: any, src: string) => ({
-    _source: src, _imdb: s.imdbId ? `tt${s.imdbId}` : null,
-    _title: s.title, _year: s.year, _raw: s,
-  });
-
-  const sceneEntries = [
-    ...srrdb.map((s: any) => toEntry(s, "srrdb")),
-    ...predb.map((s: any) => toEntry(s, "predb")),
-    ...scnsrc.map((s: any) => toEntry(s, "scnsrc")),
-  ];
-
-  // YTS + TMDB first (rich data), scene sources second (need enrichment)
-  const all = [...yts, ...nowPlaying, ...upcoming, ...popular, ...trending, ...sceneEntries];
-
-  // Normalise in batches
-  const normalised: any[] = [];
-  for (let i = 0; i < all.length; i += 8) {
-    const batch = await Promise.all(all.slice(i, i + 8).map(normalise));
-    normalised.push(...batch.filter(Boolean));
-    if (normalised.length >= 60) break;
-  }
-
-  const movies = deduplicate(normalised)
-    .filter(m => m.poster)
-    .slice(0, 50);
-
-  return NextResponse.json({ movies, page }, {
+  const data = await getCachedMoviesPage(page);
+  return NextResponse.json(data, {
     headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
   });
 }
