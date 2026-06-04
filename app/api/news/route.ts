@@ -18,9 +18,9 @@ const getKeys = () => ({
 
 // ── Sources ──────────────────────────────────────────────────────────────────
 const RSS_SOURCES = [
-  { url: "https://deadline.com/feed/",                    name: "Deadline",           focus: "breaking news & zákulisí", lang: "en" },
-  { url: "https://variety.com/feed/",                     name: "Variety",            focus: "průmysl & business",       lang: "en" },
-  { url: "https://www.hollywoodreporter.com/feed/",       name: "Hollywood Reporter", focus: "festivaly & rozhovory",    lang: "en" },
+  { url: "https://deadline.com/v/film/feed/",             name: "Deadline",           focus: "breaking news & zákulisí", lang: "en" },
+  { url: "https://variety.com/c/film/feed/",              name: "Variety",            focus: "průmysl & business",       lang: "en" },
+  { url: "https://www.hollywoodreporter.com/c/movies/movie-news/feed/", name: "Hollywood Reporter", focus: "festivaly & rozhovory",    lang: "en" },
   { url: "https://www.indiewire.com/c/film/feed/",        name: "IndieWire",          focus: "indie & autorský film",    lang: "en" },
   { url: "https://www.moviezone.cz/rss/",                name: "MovieZone.cz",       focus: "české filmové novinky",    lang: "cs" },
 ];
@@ -330,7 +330,7 @@ const fetchNewsData = unstable_cache(
 
     return { articles, trending };
   },
-  ["news-data-v3"],
+  ["news-data-v4"],
   { revalidate: 1800 }
 );
 
