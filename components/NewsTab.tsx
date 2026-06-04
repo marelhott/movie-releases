@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import { X, ExternalLink, Flame, RefreshCw, Loader2, Newspaper } from "lucide-react";
 import { NewsArticle, NewsData } from "@/types/news";
 import { formatDistanceToNow } from "date-fns";
@@ -34,7 +33,7 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
 
         {article.image && !imgErr && (
           <div className="relative w-full h-56 rounded-t-2xl overflow-hidden">
-            <Image src={article.image} alt="" fill className="object-cover" onError={() => setImgErr(true)} />
+            <img src={article.image} alt="" className="absolute inset-0 w-full h-full object-cover" onError={() => setImgErr(true)} />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-900" />
           </div>
         )}
@@ -73,8 +72,8 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
       {/* Thumbnail */}
       <div className="relative w-full aspect-video bg-zinc-800">
         {article.image && !imgErr ? (
-          <Image src={article.image} alt="" fill className="object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={() => setImgErr(true)} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
+          <img src={article.image} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={() => setImgErr(true)} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-zinc-700">
             <Newspaper className="w-8 h-8" />
@@ -114,7 +113,7 @@ function TrendingCard({ article }: { article: NewsArticle }) {
       className="group relative rounded-xl overflow-hidden bg-zinc-900 hover:scale-[1.02] transition-transform shadow-md">
       <div className="relative aspect-video w-full bg-zinc-800">
         {article.image && !imgErr ? (
-          <Image src={article.image} alt={article.title_cs} fill className="object-cover" onError={() => setImgErr(true)} sizes="25vw" />
+          <img src={article.image} alt={article.title_cs} className="absolute inset-0 w-full h-full object-cover" onError={() => setImgErr(true)} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-zinc-700"><Flame className="w-8 h-8" /></div>
         )}
