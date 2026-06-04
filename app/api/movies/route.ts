@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { fetchSrrdb, fetchPredb, fetchScnsrcScene } from "@/lib/sceneSources";
 
-const TMDB_KEY = process.env.TMDB_API_KEY;
-const OMDB_KEY = process.env.OMDB_API_KEY;
+export const dynamic = "force-dynamic";
+const getKeys = () => ({ tmdb: process.env.TMDB_API_KEY, omdb: process.env.OMDB_API_KEY });
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
 
@@ -20,10 +20,10 @@ async function fetchYTS(page = 1) {
 }
 
 async function fetchTMDBSection(endpoint: string) {
-  if (!TMDB_KEY) return [];
+  if (!getKeys().tmdb) return [];
   try {
     const pages = await Promise.all([1, 2].map(p =>
-      fetch(`https://api.themoviedb.org/3/${endpoint}?api_key=${TMDB_KEY}&language=cs&region=CZ&page=${p}`,
+      fetch(`https://api.themoviedb.org/3/${endpoint}?api_key=${getKeys().tmdb}&language=cs&region=CZ&page=${p}`,
         { next: { revalidate: 3600 } }).then(r => r.json())
     ));
     return pages.flatMap((d: any) => d.results ?? []).map((m: any) => ({
@@ -36,10 +36,10 @@ async function fetchTMDBSection(endpoint: string) {
 // ── TMDB enrichment ──────────────────────────────────────────────────────────
 
 async function getTMDBDetail(tmdbId: number): Promise<any> {
-  if (!TMDB_KEY || !tmdbId) return null;
+  if (!getKeys().tmdb || !tmdbId) return null;
   try {
     const res = await fetch(
-      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_KEY}&language=cs&append_to_response=credits,external_ids`,
+      `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${getKeys().tmdb}&language=cs&append_to_response=credits,external_ids`,
       { next: { revalidate: 86400 } }
     );
     return res.json();
@@ -47,10 +47,10 @@ async function getTMDBDetail(tmdbId: number): Promise<any> {
 }
 
 async function findTMDBByIMDB(imdbId: string): Promise<any> {
-  if (!TMDB_KEY || !imdbId?.startsWith("tt")) return null;
+  if (!getKeys().tmdb || !imdbId?.startsWith("tt")) return null;
   try {
     const res = await fetch(
-      `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_KEY}&external_source=imdb_id`,
+      `https://api.themoviedb.org/3/find/${imdbId}?api_key=${getKeys().tmdb}&external_source=imdb_id`,
       { next: { revalidate: 86400 } }
     );
     const data = await res.json();
@@ -60,10 +60,10 @@ async function findTMDBByIMDB(imdbId: string): Promise<any> {
 }
 
 async function searchTMDB(title: string, year: number): Promise<any> {
-  if (!TMDB_KEY || !title) return null;
+  if (!getKeys().tmdb || !title) return null;
   try {
     const res = await fetch(
-      `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&year=${year || ""}&language=cs`,
+      `https://api.themoviedb.org/3/search/movie?api_key=${getKeys().tmdb}&query=${encodeURIComponent(title)}&year=${year || ""}&language=cs`,
       { next: { revalidate: 86400 } }
     );
     const data = await res.json();
@@ -73,9 +73,9 @@ async function searchTMDB(title: string, year: number): Promise<any> {
 }
 
 async function fetchOMDB(imdbId: string) {
-  if (!OMDB_KEY || !imdbId) return null;
+  if (!getKeys().omdb || !imdbId) return null;
   try {
-    const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`,
+    const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${getKeys().omdb}`,
       { next: { revalidate: 86400 } });
     return res.json();
   } catch { return null; }

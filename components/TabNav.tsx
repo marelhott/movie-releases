@@ -12,8 +12,8 @@ export default function TabNav({
   onChange: (t: Tab) => void;
 }) {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "releases", label: "Nové filmy", icon: <Film className="w-4 h-4" /> },
     { id: "news", label: "Novinky", icon: <Newspaper className="w-4 h-4" /> },
+    { id: "releases", label: "Nové filmy", icon: <Film className="w-4 h-4" /> },
   ];
 
   return (

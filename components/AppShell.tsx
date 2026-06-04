@@ -7,7 +7,7 @@ import MovieGrid from "./MovieGrid";
 import NewsTab from "./NewsTab";
 
 export default function AppShell() {
-  const [tab, setTab] = useState<Tab>("releases");
+  const [tab, setTab] = useState<Tab>("news");
 
   return (
     <>
