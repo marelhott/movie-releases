@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
 import Anthropic from "@anthropic-ai/sdk";
+import { unstable_cache } from "next/cache";
 
-// force-dynamic so Next.js doesn't try to static-render this route
-// CDN caching is handled via Cache-Control headers instead
+// force-dynamic: route handler runs every request, but unstable_cache
+// provides shared Data Cache across all Vercel serverless instances
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // Vercel max timeout
+export const maxDuration = 60;
 
 // Keys — NOT ANTHROPIC_API_KEY (overridden to "" by Claude Code shell env)
 const getKeys = () => ({
@@ -247,47 +248,52 @@ async function fetchTMDBTrending(): Promise<NewsArticle[]> {
   } catch { return []; }
 }
 
+// ── Cached data fetcher (Vercel Data Cache — shared across all instances) ────
+
+const fetchNewsData = unstable_cache(
+  async () => {
+    const [rssResults, trending] = await Promise.all([
+      Promise.all(RSS_SOURCES.map(fetchRSS)),
+      fetchTMDBTrending(),
+    ]);
+
+    const sorted = rssResults.flat()
+      .filter(a => a.title && a.link)
+      .sort((a, b) => (b.pubDate ? new Date(b.pubDate).getTime() : 0) - (a.pubDate ? new Date(a.pubDate).getTime() : 0))
+      .slice(0, 30);
+
+    const [enriched, translated] = await Promise.all([
+      enrichImages(sorted),
+      translateAll(sorted),
+    ]);
+
+    const articles = translated.map((a, i) => ({
+      ...a,
+      image: enriched[i]?.image ?? a.image,
+    }));
+
+    return { articles, trending };
+  },
+  ["news-data"],          // cache key
+  { revalidate: 1800 }    // 30 min — Vercel Data Cache
+);
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
   const force = new URL(req.url).searchParams.get("refresh") === "1";
 
-  // Local in-memory cache (works for single-instance / dev)
+  // Local in-memory fallback (dev / single-instance)
   if (_cache && !force && Date.now() - _cache.ts < CACHE_TTL) {
-    return NextResponse.json({ ..._cache.data, cached: true }, {
-      headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
-    });
+    return NextResponse.json({ ..._cache.data, cached: "memory" });
   }
 
-  // Fetch all RSS + TMDB in parallel
-  const [rssResults, trending] = await Promise.all([
-    Promise.all(RSS_SOURCES.map(fetchRSS)),
-    fetchTMDBTrending(),
-  ]);
+  // unstable_cache: on Vercel reads from shared Data Cache (fast),
+  // on first call or after revalidate runs the full fetch+translate
+  const data = await fetchNewsData();
 
-  const sorted = rssResults.flat()
-    .filter(a => a.title && a.link)
-    .sort((a, b) => (b.pubDate ? new Date(b.pubDate).getTime() : 0) - (a.pubDate ? new Date(a.pubDate).getTime() : 0))
-    .slice(0, 30);
-
-  // Enrich images + translate in parallel
-  const [enriched, translated] = await Promise.all([
-    enrichImages(sorted),
-    translateAll(sorted),
-  ]);
-
-  // Merge image results into translated articles
-  const articles = translated.map((a, i) => ({
-    ...a,
-    image: enriched[i]?.image ?? a.image,
-  }));
-
-  const data = { articles, trending };
+  // Update local cache too
   _cache = { data, ts: Date.now() };
 
-  // s-maxage=1800 → Vercel CDN cachuje 30 min
-  // stale-while-revalidate=3600 → CDN servíruje stale a revaliduje na pozadí
-  return NextResponse.json(data, {
-    headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
-  });
+  return NextResponse.json(data);
 }
