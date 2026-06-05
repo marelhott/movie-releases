@@ -51,13 +51,18 @@ type NewsCache = {
   page: number;
   hasMore: boolean;
   hydrated: boolean;
+  fetchedAt: number;
 };
+
+const CACHE_TTL_MS = 15 * 60 * 1000;
+const STORAGE_KEY = "movie-releases:news-cache:v1";
 
 const newsCache: NewsCache = {
   articles: [],
   page: 0,
   hasMore: true,
   hydrated: false,
+  fetchedAt: 0,
 };
 
 function localizeKnownFor(value: string) {
@@ -298,7 +303,11 @@ export default function NewsTab() {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const pendingPagesRef = useRef(new Set<number>());
 
-  const loadPage = useEffectEvent(async (nextPage: number, mode: "replace" | "append") => {
+  const loadPage = useEffectEvent(async (
+    nextPage: number,
+    mode: "replace" | "append",
+    options?: { forceRefresh?: boolean }
+  ) => {
     if (pendingPagesRef.current.has(nextPage)) return;
 
     pendingPagesRef.current.add(nextPage);
@@ -310,7 +319,10 @@ export default function NewsTab() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/news?page=${nextPage}&pageSize=${PAGE_SIZE}`);
+      const refreshSuffix = options?.forceRefresh ? `&refresh=${Date.now()}` : "";
+      const res = await fetch(`/api/news?page=${nextPage}&pageSize=${PAGE_SIZE}${refreshSuffix}`, {
+        cache: options?.forceRefresh ? "no-store" : "default",
+      });
       if (!res.ok) throw new Error("Chyba načítání");
       const payload = await res.json() as NewsResponse;
 
@@ -329,6 +341,20 @@ export default function NewsTab() {
       newsCache.page = payload.page;
       newsCache.hasMore = payload.hasMore;
       newsCache.hydrated = true;
+      newsCache.fetchedAt = Date.now();
+
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            articles: newsCache.articles,
+            page: newsCache.page,
+            hasMore: newsCache.hasMore,
+            hydrated: newsCache.hydrated,
+            fetchedAt: newsCache.fetchedAt,
+          } satisfies NewsCache)
+        );
+      } catch {}
 
       if (payload.page === 1 && payload.hasMore) {
         window.setTimeout(() => {
@@ -345,7 +371,32 @@ export default function NewsTab() {
   });
 
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as NewsCache;
+        if (Array.isArray(parsed.articles) && parsed.articles.length > 0) {
+          newsCache.articles = parsed.articles;
+          newsCache.page = parsed.page;
+          newsCache.hasMore = parsed.hasMore;
+          newsCache.hydrated = true;
+          newsCache.fetchedAt = parsed.fetchedAt;
+          setArticles(parsed.articles);
+          setPage(parsed.page);
+          setHasMore(parsed.hasMore);
+          setLoadingInitial(false);
+        }
+      }
+    } catch {}
+
     if (newsCache.hydrated) return;
+    void loadPage(1, "replace");
+  }, [loadPage]);
+
+  useEffect(() => {
+    if (!newsCache.hydrated) return;
+    if (Date.now() - newsCache.fetchedAt < CACHE_TTL_MS) return;
+    if (newsCache.page !== 1) return;
     void loadPage(1, "replace");
   }, [loadPage]);
 
@@ -354,9 +405,14 @@ export default function NewsTab() {
     newsCache.page = 0;
     newsCache.hasMore = true;
     newsCache.hydrated = false;
+    newsCache.fetchedAt = 0;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setArticles([]);
     setHasMore(true);
     setPage(0);
-    void loadPage(1, "replace");
+    void loadPage(1, "replace", { forceRefresh: true });
   });
 
   const loadNextPage = useEffectEvent(async () => {

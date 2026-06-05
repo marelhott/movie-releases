@@ -449,6 +449,13 @@ ${JSON.stringify(payload)}`;
 
 const getRawNewsFeed = unstable_cache(
   async () => {
+    return buildRawNewsFeed();
+  },
+  ["raw-news-feed-v3"],
+  { revalidate: 900 }
+);
+
+async function buildRawNewsFeed() {
     const rssResults = await Promise.all(RSS_SOURCES.map(fetchRSS));
     return deduplicate(
       rssResults.flat()
@@ -459,10 +466,7 @@ const getRawNewsFeed = unstable_cache(
           return right - left;
         })
     ).slice(0, RAW_NEWS_LIMIT);
-  },
-  ["raw-news-feed-v3"],
-  { revalidate: 900 }
-);
+}
 
 const getCachedOgImage = unstable_cache(
   async (link: string) => fetchOGImage(link),
@@ -500,7 +504,14 @@ const getCachedGeneratedBatch = unstable_cache(
 
 const getCachedNewsPage = unstable_cache(
   async (page: number, pageSize: number) => {
-    const allArticles = await getRawNewsFeed();
+    return buildNewsPage(page, pageSize, false);
+  },
+  ["news-page-v7"],
+  { revalidate: 900 }
+);
+
+async function buildNewsPage(page: number, pageSize: number, forceRefresh: boolean) {
+    const allArticles = forceRefresh ? await buildRawNewsFeed() : await getRawNewsFeed();
     const start = Math.max(0, (page - 1) * pageSize);
     const pageItems = allArticles.slice(start, start + pageSize).map((article) => ({ ...article }));
     const hasMore = start + pageSize < allArticles.length;
@@ -518,7 +529,11 @@ const getCachedNewsPage = unstable_cache(
       batches.push(articlesWithImages.slice(index, index + CLAUDE_BATCH_SIZE));
     }
     const translated = await Promise.all(
-      batches.map((batch) => getCachedGeneratedBatch(JSON.stringify(batch)))
+      batches.map((batch) =>
+        forceRefresh
+          ? generateFreshBatch(batch)
+          : getCachedGeneratedBatch(JSON.stringify(batch))
+      )
     );
 
     return {
@@ -527,18 +542,45 @@ const getCachedNewsPage = unstable_cache(
       page,
       pageSize,
       total: allArticles.length,
+      refreshedAt: forceRefresh ? Date.now() : undefined,
     };
-  },
-  ["news-page-v7"],
-  { revalidate: 900 }
-);
+}
+
+async function generateFreshBatch(articles: RawArticle[]) {
+  const { tmdb, anthropic } = getKeys();
+
+  if (!(anthropic && tmdb)) {
+    return articles.map((article) => buildLocalArticle(article));
+  }
+
+  const client = new Anthropic({ apiKey: anthropic });
+  const translatedArticles = await generateArticleBatch(
+    articles.filter((article) => article.lang !== "cs"),
+    client,
+    tmdb
+  );
+  const translatedByLink = new Map(translatedArticles.map((article) => [article.link, article]));
+
+  return articles.map((article) =>
+    article.lang === "cs"
+      ? buildLocalArticle(article)
+      : translatedByLink.get(article.link) ?? buildLocalArticle(article)
+  );
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(searchParams.get("pageSize") ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE));
-  const data = await getCachedNewsPage(page, pageSize);
+  const forceRefresh = searchParams.has("refresh");
+  const data = forceRefresh
+    ? await buildNewsPage(page, pageSize, true)
+    : await getCachedNewsPage(page, pageSize);
   return NextResponse.json(data, {
-    headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
+    headers: {
+      "Cache-Control": forceRefresh
+        ? "no-store, max-age=0"
+        : "public, s-maxage=1800, stale-while-revalidate=3600",
+    },
   });
 }

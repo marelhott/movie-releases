@@ -14,6 +14,7 @@ type MovieCache = {
 };
 
 const CACHE_TTL_MS = 15 * 60 * 1000;
+const STORAGE_KEY = "movie-releases:movies-cache:v1";
 
 const movieCache: MovieCache = {
   movies: [],
@@ -30,11 +31,18 @@ export default function MovieGrid() {
   const [hasMore, setHasMore] = useState(movieCache.hasMore);
   const [error, setError] = useState<string | null>(null);
 
-  const loadMovies = useEffectEvent(async (p: number, mode: "replace" | "append" = "replace") => {
+  const loadMovies = useEffectEvent(async (
+    p: number,
+    mode: "replace" | "append" = "replace",
+    options?: { forceRefresh?: boolean }
+  ) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/movies?page=${p}`);
+      const refreshSuffix = options?.forceRefresh ? `&refresh=${Date.now()}` : "";
+      const res = await fetch(`/api/movies?page=${p}${refreshSuffix}`, {
+        cache: options?.forceRefresh ? "no-store" : "default",
+      });
       if (!res.ok) throw new Error("Chyba při načítání filmů");
       const data = await res.json();
       if (!data.movies?.length) {
@@ -53,6 +61,18 @@ export default function MovieGrid() {
       }
       movieCache.hydrated = true;
       movieCache.fetchedAt = Date.now();
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            movies: movieCache.movies,
+            page: movieCache.page,
+            hasMore: movieCache.hasMore,
+            hydrated: movieCache.hydrated,
+            fetchedAt: movieCache.fetchedAt,
+          } satisfies MovieCache)
+        );
+      } catch {}
     } catch (e) {
       setError(e instanceof Error ? e.message : "Neznámá chyba");
     } finally {
@@ -61,6 +81,24 @@ export default function MovieGrid() {
   });
 
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as MovieCache;
+        if (Array.isArray(parsed.movies) && parsed.movies.length > 0) {
+          movieCache.movies = parsed.movies;
+          movieCache.page = parsed.page;
+          movieCache.hasMore = parsed.hasMore;
+          movieCache.hydrated = true;
+          movieCache.fetchedAt = parsed.fetchedAt;
+          setMovies(parsed.movies);
+          setPage(parsed.page);
+          setHasMore(parsed.hasMore);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
     if (movieCache.hydrated) return;
     void loadMovies(1, "replace");
   }, [loadMovies]);
@@ -89,9 +127,13 @@ export default function MovieGrid() {
     movieCache.hasMore = true;
     movieCache.movies = [];
     movieCache.fetchedAt = 0;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setMovies([]);
     setPage(1);
     setHasMore(true);
-    void loadMovies(1, "replace");
+    void loadMovies(1, "replace", { forceRefresh: true });
   });
 
   return (

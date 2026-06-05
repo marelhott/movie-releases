@@ -393,6 +393,13 @@ function deduplicateRawEntries(entries: any[]) {
 
 const getCachedMoviesPage = unstable_cache(
   async (page: number) => {
+    return buildMoviesPage(page, false);
+  },
+  ["movies-page-v4"],
+  { revalidate: 1800 }
+);
+
+async function buildMoviesPage(page: number, forceFresh: boolean) {
     const [yts, nowPlaying, upcoming, srrdb, predb, scnsrc] =
       await Promise.all([
         fetchYTS(page),
@@ -439,19 +446,21 @@ const getCachedMoviesPage = unstable_cache(
       .filter(m => m.poster)
       .slice(0, MOVIES_PAGE_LIMIT);
 
-    return { movies, page };
-  },
-  ["movies-page-v4"],
-  { revalidate: 1800 }
-);
+    return { movies, page, refreshedAt: forceFresh ? Date.now() : undefined };
+}
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get("page") ?? "1");
-  const data = await getCachedMoviesPage(page);
+  const forceRefresh = searchParams.has("refresh");
+  const data = forceRefresh ? await buildMoviesPage(page, true) : await getCachedMoviesPage(page);
   return NextResponse.json(data, {
-    headers: { "Cache-Control": "public, s-maxage=1800, stale-while-revalidate=3600" },
+    headers: {
+      "Cache-Control": forceRefresh
+        ? "no-store, max-age=0"
+        : "public, s-maxage=1800, stale-while-revalidate=3600",
+    },
   });
 }
