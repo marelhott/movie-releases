@@ -44,18 +44,18 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-        <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-zinc-900 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(29,42,36,0.28)] p-4 backdrop-blur-sm" onClick={onClose}>
+        <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl" onClick={e => e.stopPropagation()}>
 
           {/* Backdrop */}
           {movie.backdrop && (
             <div className="relative h-48 w-full overflow-hidden rounded-t-2xl">
               <Image src={movie.backdrop} alt="" fill className="object-cover opacity-60" />
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-900" />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[color:var(--surface)]" />
             </div>
           )}
 
-          <button onClick={onClose} className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/80 transition-colors">
+          <button onClick={onClose} className="absolute right-3 top-3 z-10 rounded-full bg-white/80 p-1.5 text-[color:var(--foreground)] shadow hover:bg-white transition-colors">
             <X className="w-5 h-5" />
           </button>
 
@@ -73,10 +73,10 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
 
             {/* Details */}
             <div className="flex-1 min-w-0 pt-16 sm:pt-0">
-              <h2 className="text-2xl font-bold text-white leading-tight">{movie.title}</h2>
-              {movie.czech_title && <p className="text-zinc-400 mt-0.5">{movie.czech_title}</p>}
+              <h2 className="text-2xl font-bold leading-tight text-[color:var(--foreground)]">{movie.title}</h2>
+              {movie.czech_title && <p className="mt-0.5 text-[color:var(--muted)]">{movie.czech_title}</p>}
 
-              <div className="flex flex-wrap gap-3 mt-3 text-sm text-zinc-400">
+              <div className="mt-3 flex flex-wrap gap-3 text-sm text-[color:var(--muted)]">
                 <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />{movie.year}</span>
                 {movie.runtime > 0 && <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{movie.runtime} min</span>}
               </div>
@@ -84,7 +84,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               {movie.genres.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {movie.genres.map(g => (
-                    <span key={g} className="px-2 py-0.5 rounded-full text-xs bg-zinc-700 text-zinc-300">{g}</span>
+                    <span key={g} className="rounded-full bg-[color:var(--surface-muted)] px-2 py-0.5 text-xs text-[color:var(--foreground)]">{g}</span>
                   ))}
                 </div>
               )}
@@ -99,27 +99,27 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
 
               {/* Overview */}
               {movie.overview ? (
-                <p className="mt-4 text-zinc-300 text-sm leading-relaxed">{movie.overview}</p>
+                <p className="mt-4 text-sm leading-relaxed text-[color:var(--foreground)]">{movie.overview}</p>
               ) : (
-                <p className="mt-4 text-zinc-500 text-sm italic">Popis není k dispozici.</p>
+                <p className="mt-4 text-sm italic text-[color:var(--muted)]">Popis není k dispozici.</p>
               )}
 
               {/* Director */}
               {movie.director && (
                 <div className="mt-5">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Režisér</p>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Režisér</p>
                   <button
                     onClick={() => setPersonId(movie.director!.id)}
-                    className="flex items-center gap-3 group hover:bg-zinc-800 rounded-xl p-2 -ml-2 transition-colors"
+                    className="-ml-2 flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-[color:var(--surface-muted)] group"
                   >
-                    <div className="w-12 h-14 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
+                    <div className="h-14 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
                       {movie.director.photo ? (
                         <Image src={movie.director.photo} alt={movie.director.name} width={48} height={56} className="object-cover w-full h-full" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-zinc-600"><Film className="w-4 h-4" /></div>
                       )}
                     </div>
-                    <span className="font-semibold text-white group-hover:text-emerald-400 transition-colors">{movie.director.name}</span>
+                    <span className="font-semibold text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">{movie.director.name}</span>
                   </button>
                 </div>
               )}
@@ -127,7 +127,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               {/* Cast */}
               {movie.cast.length > 0 && (
                 <div className="mt-5">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Obsazení</p>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Obsazení</p>
                   <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin">
                     {movie.cast.map(m => (
                       <CastCard key={m.id} member={m} onClick={() => setPersonId(m.id)} />
@@ -140,7 +140,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               {movie.sources?.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-4">
                   {movie.sources.map(s => (
-                    <span key={s} className="px-2 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    <span key={s} className="rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-2 py-0.5 text-xs text-[color:var(--muted)]">
                       {SOURCE_LABELS[s] ?? s}
                     </span>
                   ))}
@@ -150,12 +150,12 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               {/* Torrents */}
               {movie.torrents?.length > 0 && (
                 <div className="mt-5">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Dostupné kvality</p>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Dostupné kvality</p>
                   <div className="flex flex-wrap gap-2">
                     {movie.torrents.map((t, i) => (
-                      <div key={i} className="px-3 py-1.5 rounded-lg bg-zinc-800 text-xs text-zinc-300 flex gap-2 items-center">
-                        <span className="font-bold text-emerald-400">{t.quality}</span>
-                        <span className="text-zinc-500">{t.type}</span>
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-3 py-1.5 text-xs text-[color:var(--foreground)]">
+                        <span className="font-bold text-[color:var(--accent)]">{t.quality}</span>
+                        <span className="text-[color:var(--muted)]">{t.type}</span>
                         <span>{t.size}</span>
                         <span className="text-green-500">▲ {t.seeds}</span>
                       </div>
@@ -168,14 +168,14 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               <div className="flex gap-3 mt-5">
                 {movie.imdb_code && (
                   <a href={`https://www.imdb.com/title/${movie.imdb_code}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors">
+                    className="flex items-center gap-1.5 rounded-lg bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-700 transition-colors hover:bg-yellow-500/20">
                     <ExternalLink className="w-3.5 h-3.5" /> IMDB
                   </a>
                 )}
                 {movie.torrents?.length > 0 && (
                   <a href={`https://yts.mx/movies/${movie.title.toLowerCase().replace(/\s+/g, "-")}-${movie.year}`}
                     target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs text-[color:var(--accent)] transition-colors hover:bg-emerald-500/20">
                     <Film className="w-3.5 h-3.5" /> YTS
                   </a>
                 )}
@@ -194,7 +194,7 @@ function RatingBadge({ label, value, color }: { label: string; value: string; co
   return (
     <div className="flex flex-col items-center">
       <span className={`text-lg font-bold ${color}`}>{value}</span>
-      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-xs text-[color:var(--muted)]">{label}</span>
     </div>
   );
 }

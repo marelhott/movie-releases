@@ -46,6 +46,20 @@ const SOURCE_FILTERS = [
   "MovieZone.cz",
 ] as const;
 
+type NewsCache = {
+  articles: NewsArticle[];
+  page: number;
+  hasMore: boolean;
+  hydrated: boolean;
+};
+
+const newsCache: NewsCache = {
+  articles: [],
+  page: 0,
+  hasMore: true,
+  hydrated: false,
+};
+
 function timeAgo(value: string) {
   if (!value) return "";
   try {
@@ -68,26 +82,26 @@ function PersonSnippet({
         event.stopPropagation();
         onClickPerson(person.id);
       }}
-      className="mt-3 flex w-full items-center gap-3 rounded-xl bg-zinc-800 p-2.5 text-left transition-colors hover:bg-zinc-700 group"
+      className="group mt-3 flex w-full items-center gap-3 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] p-2.5 text-left transition-colors hover:bg-[color:var(--surface-muted)]"
     >
-      <div className="h-12 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-zinc-700">
+      <div className="h-12 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
         {person.photo ? (
           <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-zinc-500">
+          <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
             <Film className="h-4 w-4" />
           </div>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-white transition-colors group-hover:text-emerald-400">
+        <p className="text-sm font-semibold text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
           {person.name}
         </p>
-        <p className="text-xs text-zinc-400">{person.known_for}</p>
+        <p className="text-xs text-[color:var(--muted)]">{person.known_for}</p>
         {person.top_films.length > 0 && (
           <div className="mt-1.5 flex gap-1 overflow-x-auto">
             {person.top_films.slice(0, 4).map((film, index) => (
-              <div key={`${film.title}-${index}`} className="h-11 w-8 flex-shrink-0 overflow-hidden rounded bg-zinc-700">
+              <div key={`${film.title}-${index}`} className="h-11 w-8 flex-shrink-0 overflow-hidden rounded bg-[color:var(--surface-muted)]">
                 {film.poster ? (
                   <img
                     src={film.poster}
@@ -96,7 +110,7 @@ function PersonSnippet({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs text-zinc-600">
+                  <div className="flex h-full w-full items-center justify-center text-xs text-[color:var(--muted)]">
                     {film.year}
                   </div>
                 )}
@@ -128,14 +142,14 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(29,42,36,0.28)] p-4 backdrop-blur-sm" onClick={onClose}>
         <div
-          className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-zinc-900 shadow-2xl"
+          className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl"
           onClick={(event) => event.stopPropagation()}
         >
           <button
             onClick={onClose}
-            className="absolute right-3 top-3 z-10 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80"
+            className="absolute right-3 top-3 z-10 rounded-full bg-white/85 p-1.5 text-[color:var(--foreground)] hover:bg-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -148,19 +162,19 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
 
           <div className="p-6">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-300">
+              <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-0.5 text-xs font-medium text-[color:var(--foreground)]">
                 {article.source}
               </span>
-              <span className="text-xs text-zinc-500">{article.focus}</span>
-              {article.pubDate && <span className="ml-auto text-xs text-zinc-600">{timeAgo(article.pubDate)}</span>}
+              <span className="text-xs text-[color:var(--muted)]">{article.focus}</span>
+              {article.pubDate && <span className="ml-auto text-xs text-[color:var(--muted)]">{timeAgo(article.pubDate)}</span>}
             </div>
 
-            <h2 className="mb-3 text-xl font-bold leading-snug text-white">{article.title_cs}</h2>
-            <p className="text-sm leading-relaxed text-zinc-300">{article.body_cs}</p>
+            <h2 className="mb-3 text-xl font-bold leading-snug text-[color:var(--foreground)]">{article.title_cs}</h2>
+            <p className="text-sm leading-relaxed text-[color:var(--foreground)]">{article.body_cs}</p>
 
             {article.person && (
               <div className="mt-4">
-                <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">O kom je rec</p>
+                <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">O kom je rec</p>
                 <PersonSnippet person={article.person} onClickPerson={setPersonId} />
               </div>
             )}
@@ -185,48 +199,51 @@ const SOURCE_BADGE: Record<string, string> = {
 function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => void }) {
   const [imgError, setImgError] = useState(false);
   const [personId, setPersonId] = useState<number | null>(null);
-  const badge = SOURCE_BADGE[article.source] ?? "bg-zinc-800/80 text-zinc-300";
+  const badge = SOURCE_BADGE[article.source] ?? "bg-[rgba(255,253,248,0.88)] text-[color:var(--foreground)]";
 
   return (
     <>
       <article
-        className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl bg-zinc-900 shadow transition-colors hover:bg-zinc-800"
+        className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-sm transition-colors hover:bg-[color:var(--surface-muted)]"
         onClick={onClick}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "320px 420px" }}
       >
-        <div className="relative aspect-video w-full flex-shrink-0 bg-zinc-800">
+        <div className="relative aspect-video w-full flex-shrink-0 bg-[color:var(--surface-muted)]">
           {article.image && !imgError ? (
             <img
               src={article.image}
               alt=""
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               onError={() => setImgError(true)}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-zinc-700">
+            <div className="absolute inset-0 flex items-center justify-center text-[color:var(--muted)]">
               <Clapperboard className="h-7 w-7" />
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(29,42,36,0.72)] via-[rgba(29,42,36,0.08)] to-transparent" />
           <span className={`absolute bottom-2 left-2 rounded-full px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${badge}`}>
             {article.source}
           </span>
           {article.pubDate && (
-            <span className="absolute right-2 top-2 rounded bg-black/50 px-1.5 py-0.5 text-xs text-zinc-300 backdrop-blur-sm">
+            <span className="absolute right-2 top-2 rounded bg-white/80 px-1.5 py-0.5 text-xs text-[color:var(--foreground)] backdrop-blur-sm">
               {timeAgo(article.pubDate)}
             </span>
           )}
         </div>
 
         <div className="flex flex-1 flex-col p-4">
-          <p className="mb-2 text-xs text-zinc-500">{article.focus}</p>
-          <h3 className="mb-2 text-lg font-semibold leading-snug text-white transition-colors group-hover:text-emerald-400">
+          <p className="mb-2 text-xs text-[color:var(--muted)]">{article.focus}</p>
+          <h3 className="mb-2 text-lg font-semibold leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
             {article.title_cs}
           </h3>
-          <p className="line-clamp-4 flex-1 text-sm leading-relaxed text-zinc-400">{article.body_cs}</p>
+          <p className="line-clamp-4 flex-1 text-sm leading-relaxed text-[color:var(--muted)]">{article.body_cs}</p>
 
           {article.person && (
             <div
-              className="mt-3 flex items-center gap-2 border-t border-zinc-800 pt-3"
+              className="mt-3 flex items-center gap-2 border-t border-[color:var(--line)] pt-3"
               onClick={(event) => {
                 event.stopPropagation();
                 setPersonId(article.person!.id);
@@ -236,13 +253,15 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
                 <img
                   src={article.person.photo}
                   alt={article.person.name}
-                  className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-zinc-600"
+                  className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-[color:var(--line)]"
+                  loading="lazy"
+                  decoding="async"
                 />
               )}
-              <span className="text-xs text-zinc-400 transition-colors hover:text-emerald-400">
+              <span className="text-xs text-[color:var(--muted)] transition-colors hover:text-[color:var(--accent)]">
                 {article.person.name}
               </span>
-              <ChevronRight className="ml-auto h-3 w-3 text-zinc-600" />
+              <ChevronRight className="ml-auto h-3 w-3 text-[color:var(--muted)]" />
             </div>
           )}
         </div>
@@ -254,10 +273,10 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
 }
 
 export default function NewsTab() {
-  const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [articles, setArticles] = useState<NewsArticle[]>(newsCache.articles);
+  const [page, setPage] = useState(newsCache.page);
+  const [hasMore, setHasMore] = useState(newsCache.hasMore);
+  const [loadingInitial, setLoadingInitial] = useState(!newsCache.hydrated);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("vse");
@@ -282,12 +301,26 @@ export default function NewsTab() {
       const payload = await res.json() as NewsResponse;
 
       setArticles((current) => {
-        if (mode === "replace") return payload.articles;
+        if (mode === "replace") {
+          newsCache.articles = payload.articles;
+          return payload.articles;
+        }
         const seen = new Set(current.map((article) => article.link));
-        return [...current, ...payload.articles.filter((article) => !seen.has(article.link))];
+        const merged = [...current, ...payload.articles.filter((article) => !seen.has(article.link))];
+        newsCache.articles = merged;
+        return merged;
       });
       setPage(payload.page);
       setHasMore(payload.hasMore);
+      newsCache.page = payload.page;
+      newsCache.hasMore = payload.hasMore;
+      newsCache.hydrated = true;
+
+      if (payload.page === 1 && payload.hasMore) {
+        window.setTimeout(() => {
+          void fetch(`/api/news?page=2&pageSize=${PAGE_SIZE}`);
+        }, 800);
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Chyba");
     } finally {
@@ -298,10 +331,15 @@ export default function NewsTab() {
   });
 
   useEffect(() => {
+    if (newsCache.hydrated) return;
     void loadPage(1, "replace");
   }, [loadPage]);
 
   const refresh = useEffectEvent(async () => {
+    newsCache.articles = [];
+    newsCache.page = 0;
+    newsCache.hasMore = true;
+    newsCache.hydrated = false;
     setHasMore(true);
     setPage(0);
     void loadPage(1, "replace");
@@ -334,18 +372,18 @@ export default function NewsTab() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="flex items-center gap-2 text-lg font-bold">
-          <Clapperboard className="h-5 w-5 text-blue-400" />
+        <h2 className="flex items-center gap-2 text-lg font-bold text-[color:var(--foreground)]">
+          <Clapperboard className="h-5 w-5 text-[color:var(--accent)]" />
           Filmove novinky
           {articles.length > 0 && (
-            <span className="text-sm font-normal text-zinc-500">{filteredArticles.length} zprav</span>
+            <span className="text-sm font-normal text-[color:var(--muted)]">{filteredArticles.length} zprav</span>
           )}
         </h2>
 
         <button
           onClick={() => void refresh()}
           disabled={loadingInitial || loadingMore}
-          className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loadingInitial || loadingMore ? "animate-spin" : ""}`} />
           Aktualizovat
@@ -359,7 +397,7 @@ export default function NewsTab() {
               key={source}
               onClick={() => setFilter(source)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                filter === source ? "bg-emerald-500 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                filter === source ? "bg-[color:var(--accent)] text-white" : "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)]"
               }`}
             >
               {source === "vse" ? "vse" : source}
@@ -373,13 +411,13 @@ export default function NewsTab() {
       {loadingInitial && articles.length === 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 9 }).map((_, index) => (
-            <div key={index} className="overflow-hidden rounded-2xl bg-zinc-900">
-              <div className="aspect-video animate-pulse bg-zinc-800" />
+            <div key={index} className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)]">
+              <div className="aspect-video animate-pulse bg-[color:var(--surface-muted)]" />
               <div className="space-y-3 p-4">
-                <div className="h-3 w-24 animate-pulse rounded bg-zinc-800" />
-                <div className="h-6 w-full animate-pulse rounded bg-zinc-800" />
-                <div className="h-4 w-full animate-pulse rounded bg-zinc-800" />
-                <div className="h-4 w-5/6 animate-pulse rounded bg-zinc-800" />
+                <div className="h-3 w-24 animate-pulse rounded bg-[color:var(--surface-muted)]" />
+                <div className="h-6 w-full animate-pulse rounded bg-[color:var(--surface-muted)]" />
+                <div className="h-4 w-full animate-pulse rounded bg-[color:var(--surface-muted)]" />
+                <div className="h-4 w-5/6 animate-pulse rounded bg-[color:var(--surface-muted)]" />
               </div>
             </div>
           ))}
@@ -396,7 +434,7 @@ export default function NewsTab() {
 
       {loadingMore && (
         <div className="flex justify-center py-6">
-          <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+          <Loader2 className="h-6 w-6 animate-spin text-[color:var(--muted)]" />
         </div>
       )}
 
@@ -404,7 +442,7 @@ export default function NewsTab() {
         <div className="flex justify-center py-4">
           <button
             onClick={() => void loadNextPage()}
-            className="rounded-xl bg-zinc-800 px-5 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-700"
+            className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-2 text-sm text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]"
           >
             Nacist dalsich 30
           </button>
@@ -412,7 +450,7 @@ export default function NewsTab() {
       )}
 
       {!hasMore && articles.length > 0 && (
-        <p className="py-6 text-center text-sm text-zinc-500">Dosel jsem na konec filmoveho feedu.</p>
+        <p className="py-6 text-center text-sm text-[color:var(--muted)]">Dosel jsem na konec filmoveho feedu.</p>
       )}
 
       {selected && <ArticleModal article={selected} onClose={() => setSelected(null)} />}

@@ -18,25 +18,29 @@ export default function MovieCard({ movie }: { movie: Movie }) {
 
   return (
     <>
-      <div className="group relative cursor-pointer rounded-xl overflow-hidden bg-zinc-900 shadow-lg hover:shadow-2xl hover:scale-[1.03] transition-all duration-300" onClick={() => setOpen(true)}>
+      <div
+        className="group relative cursor-pointer overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+        onClick={() => setOpen(true)}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "240px 360px" }}
+      >
         {/* Poster */}
-        <div className="relative aspect-[2/3] w-full bg-zinc-800">
+        <div className="relative aspect-[2/3] w-full bg-[color:var(--surface-muted)]">
           {movie.poster && !imgError ? (
             <Image src={movie.poster} alt={movie.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
-              className="object-cover" onError={() => setImgError(true)} />
+              className="object-cover" onError={() => setImgError(true)} loading="lazy" />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-xs px-2 text-center">{movie.title}</div>
+            <div className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-[color:var(--muted)]">{movie.title}</div>
           )}
 
           {/* Hover overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2.5">
-            {movie.overview && <p className="text-xs text-zinc-300 line-clamp-4">{movie.overview}</p>}
+          <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-[rgba(29,42,36,0.92)] via-[rgba(29,42,36,0.18)] to-transparent p-2.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            {movie.overview && <p className="line-clamp-4 text-xs text-stone-100">{movie.overview}</p>}
           </div>
 
           {/* Badges */}
           <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
             {movie.torrents?.[0] && (
-              <span className="bg-black/70 text-xs font-bold px-1.5 py-0.5 rounded text-emerald-400 backdrop-blur-sm leading-none">
+              <span className="rounded bg-[rgba(255,253,248,0.88)] px-1.5 py-0.5 text-xs font-bold leading-none text-[color:var(--accent)] backdrop-blur-sm">
                 {movie.torrents[0].quality}
               </span>
             )}
@@ -49,13 +53,13 @@ export default function MovieCard({ movie }: { movie: Movie }) {
         </div>
 
         {/* Info */}
-        <div className="p-2.5 space-y-0.5">
-          <h3 className="font-semibold text-xs text-white leading-tight line-clamp-2">{movie.title}</h3>
+        <div className="space-y-0.5 p-2.5">
+          <h3 className="line-clamp-2 text-xs font-semibold leading-tight text-[color:var(--foreground)]">{movie.title}</h3>
           {movie.czech_title && (
-            <p className="text-xs text-zinc-500 line-clamp-1">{movie.czech_title}</p>
+            <p className="line-clamp-1 text-xs text-[color:var(--muted)]">{movie.czech_title}</p>
           )}
           <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <div className="flex items-center gap-2 text-xs text-[color:var(--muted)]">
               <span className="flex items-center gap-0.5"><Calendar className="w-2.5 h-2.5" />{movie.year}</span>
               {movie.runtime > 0 && <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{movie.runtime}m</span>}
             </div>

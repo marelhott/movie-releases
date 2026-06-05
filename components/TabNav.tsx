@@ -17,15 +17,15 @@ export default function TabNav({
   ];
 
   return (
-    <div className="flex gap-1 bg-zinc-900 rounded-xl p-1">
+    <div className="flex gap-1 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] p-1 shadow-sm">
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             active === t.id
-              ? "bg-zinc-700 text-white shadow"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+              ? "bg-[color:var(--accent)] text-white shadow"
+              : "text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)] hover:text-[color:var(--foreground)]"
           }`}
         >
           {t.icon}
