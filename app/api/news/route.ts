@@ -300,7 +300,7 @@ async function translateSingleArticle(article: RawArticle, client: Anthropic, tm
 
 Přelož a přepiš následující filmovou zprávu do češtiny.
 - "title_cs": český nadpis, max 12 slov, žádná angličtina, žádné HTML entity
-- "body_cs": 3-5 vět v češtině, novinářský styl, správná čeština i diakritika, žádné HTML entity
+- "body_cs": 3-5 vět v češtině, novinářský styl, přirozená a idiomatická čeština, správná diakritika, žádné HTML entity
 - "person_name": pokud jde primárně o herce nebo režiséra, vrať celé jméno v angličtině, jinak null
 
 Vrať POUZE validní JSON objekt se strukturou {"title_cs":"","body_cs":"","person_name":null}
@@ -362,7 +362,7 @@ async function generateArticleBatch(articles: RawArticle[], client: Anthropic, t
 
 Pro každou položku vrať:
 - "title_cs": český nadpis, max 12 slov, bez angličtiny a bez HTML entit
-- "body_cs": 3-5 vět v češtině, novinářský styl, správná čeština i diakritika, bez HTML entit
+- "body_cs": 3-5 vět v češtině, novinářský styl, přirozená a idiomatická čeština, správná diakritika, bez HTML entit
 - "person_name": pokud je hlavním tématem konkrétní herec nebo režisér, vrať celé jméno v angličtině, jinak null
 
 Nepiš markdown ani komentář. Vrať POUZE validní JSON pole s klíči "i","title_cs","body_cs","person_name".
@@ -474,7 +474,7 @@ const getCachedNewsPage = unstable_cache(
       total: allArticles.length,
     };
   },
-  ["news-page-v3"],
+  ["news-page-v4"],
   { revalidate: 1800 }
 );
 

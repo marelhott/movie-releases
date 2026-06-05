@@ -121,7 +121,7 @@ async function getCzechOverview(
       const msg = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 300,
-        messages: [{ role: "user", content: `Přelož tento popis filmu "${title}" do češtiny. Zachovej filmový jazyk, správnou češtinu i diakritiku, max 4 věty. Vrať POUZE přeložený text:\n\n${enOverview}` }],
+        messages: [{ role: "user", content: `Přelož tento popis filmu "${title}" do češtiny. Zachovej filmový jazyk, piš přirozenou a idiomatickou češtinou se správnou diakritikou, max 4 věty. Vrať POUZE přeložený text:\n\n${enOverview}` }],
       });
       const translated = msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
       if (translated.length > 20) return translated;
@@ -131,7 +131,7 @@ async function getCzechOverview(
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
-      messages: [{ role: "user", content: `Napiš stručný popis (2-3 věty) pro film "${title}"${director ? ` od režiséra ${director}` : ""}${genres.length ? `, žánr: ${genres.join(", ")}` : ""}. Piš česky, se správnou diakritikou a filmovým stylem. Vrať POUZE popis.` }],
+      messages: [{ role: "user", content: `Napiš stručný popis (2-3 věty) pro film "${title}"${director ? ` od režiséra ${director}` : ""}${genres.length ? `, žánr: ${genres.join(", ")}` : ""}. Piš přirozenou češtinou, se správnou diakritikou a filmovým stylem. Vrať POUZE popis.` }],
     });
     return msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
   } catch { return enOverview || ""; }
