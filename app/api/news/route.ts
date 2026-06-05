@@ -12,6 +12,7 @@ const MAX_PAGE_SIZE = 30;
 const RAW_NEWS_LIMIT = 120;
 const OG_IMAGE_FALLBACK_LIMIT = 10;
 const CLAUDE_BATCH_SIZE = 6;
+const ANTHROPIC_TRANSLATION_MODEL = "claude-sonnet-4-20250514";
 const ALLOWED_PERSON_DEPARTMENTS = new Set(["Acting", "Directing"]);
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
@@ -104,8 +105,8 @@ function buildFallbackBody(article: RawArticle): string {
 
 function buildLocalArticle(article: RawArticle): NewsArticle {
   return {
-    title_cs: decodeHtmlEntities(article.title.trim()),
-    body_cs: decodeHtmlEntities(buildFallbackBody(article).trim()),
+    title_cs: normalizeCzechText(decodeHtmlEntities(article.title.trim())),
+    body_cs: normalizeCzechText(decodeHtmlEntities(buildFallbackBody(article).trim())),
     title_en: article.title,
     link: article.link,
     pubDate: article.pubDate,
@@ -113,6 +114,16 @@ function buildLocalArticle(article: RawArticle): NewsArticle {
     focus: article.focus,
     image: article.image,
   };
+}
+
+function normalizeCzechText(input: string) {
+  return input
+    .replace(/\bsynem své známé\b/gi, "synem partnerky")
+    .replace(/\bsvé známé\b/gi, "partnerky")
+    .replace(/\bsi divák vzal mikrofon\b/gi, "jeden z diváků popadl mikrofon")
+    .replace(/\bdojde k odejití\b/gi, "odejde")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function extractImage(item: Record<string, unknown>): string | undefined {
@@ -335,7 +346,7 @@ ${JSON.stringify({
 
   try {
     const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: ANTHROPIC_TRANSLATION_MODEL,
       max_tokens: 500,
       temperature: 0,
       messages: [{ role: "user", content: prompt }],
@@ -347,8 +358,8 @@ ${JSON.stringify({
     const person = parsed?.person_name ? await getCachedPersonByName(parsed.person_name, tmdbKey) : undefined;
 
     return {
-      title_cs: decodeHtmlEntities(parsed?.title_cs?.trim() || article.title),
-      body_cs: decodeHtmlEntities(parsed?.body_cs?.trim() || buildFallbackBody(article)),
+      title_cs: normalizeCzechText(decodeHtmlEntities(parsed?.title_cs?.trim() || article.title)),
+      body_cs: normalizeCzechText(decodeHtmlEntities(parsed?.body_cs?.trim() || buildFallbackBody(article))),
       title_en: article.title,
       link: article.link,
       pubDate: article.pubDate,
@@ -392,7 +403,7 @@ ${JSON.stringify(payload)}`;
 
   try {
     const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: ANTHROPIC_TRANSLATION_MODEL,
       max_tokens: 2800,
       temperature: 0,
       messages: [{ role: "user", content: prompt }],
@@ -420,8 +431,8 @@ ${JSON.stringify(payload)}`;
     return articles.map((article, index) => {
       const generatedArticle = byIndex.get(index);
       return {
-        title_cs: decodeHtmlEntities(generatedArticle?.title_cs?.trim() || article.title),
-        body_cs: decodeHtmlEntities(generatedArticle?.body_cs?.trim() || buildFallbackBody(article)),
+        title_cs: normalizeCzechText(decodeHtmlEntities(generatedArticle?.title_cs?.trim() || article.title)),
+        body_cs: normalizeCzechText(decodeHtmlEntities(generatedArticle?.body_cs?.trim() || buildFallbackBody(article))),
         title_en: article.title,
         link: article.link,
         pubDate: article.pubDate,
@@ -483,7 +494,7 @@ const getCachedGeneratedBatch = unstable_cache(
         : translatedByLink.get(article.link) ?? buildLocalArticle(article)
     );
   },
-  ["news-batch-v2"],
+  ["news-batch-v3"],
   { revalidate: 604800 }
 );
 
@@ -518,7 +529,7 @@ const getCachedNewsPage = unstable_cache(
       total: allArticles.length,
     };
   },
-  ["news-page-v6"],
+  ["news-page-v7"],
   { revalidate: 900 }
 );
 
