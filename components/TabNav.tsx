@@ -17,15 +17,15 @@ export default function TabNav({
   ];
 
   return (
-    <div className="grid w-full grid-cols-2 gap-1 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] p-1 shadow-sm sm:w-auto sm:flex">
+    <div className="grid w-full grid-cols-2 border-b border-[color:var(--line)] sm:w-auto sm:min-w-[22rem]">
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
-          className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all sm:px-4 ${
+          className={`flex min-h-11 items-center justify-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors sm:px-4 ${
             active === t.id
-              ? "bg-[color:var(--accent)] text-white shadow"
-              : "text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)] hover:text-[color:var(--foreground)]"
+              ? "border-[color:var(--foreground)] font-semibold text-[color:var(--foreground)]"
+              : "border-transparent text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
           }`}
         >
           {t.icon}

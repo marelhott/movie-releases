@@ -462,13 +462,15 @@ export default function NewsTab() {
 
       {SOURCE_FILTERS.length > 1 && (
         <div className="mb-5 -mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex min-w-max gap-2 pb-1">
+          <div className="flex min-w-max gap-5 border-b border-[color:var(--line)] pb-2">
             {SOURCE_FILTERS.map((source) => (
               <button
                 key={source}
                 onClick={() => setFilter(source)}
-                className={`min-h-10 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  filter === source ? "bg-[color:var(--accent)] text-white" : "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)]"
+                className={`whitespace-nowrap border-b-2 pb-2 text-sm transition-colors ${
+                  filter === source
+                    ? "border-[color:var(--foreground)] font-semibold text-[color:var(--foreground)]"
+                    : "border-transparent text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
                 }`}
               >
                 {source === "vse" ? "vše" : source}
