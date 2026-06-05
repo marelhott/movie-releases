@@ -7,9 +7,10 @@ const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 30;
 const RAW_NEWS_LIMIT = 120;
 const CLAUDE_BATCH_SIZE = 10;
-const OG_IMAGE_FALLBACK_LIMIT = 12;
+const OG_IMAGE_ENRICH_LIMIT = 40;
 const ANTHROPIC_TRANSLATION_MODEL = "claude-sonnet-4-20250514";
 const ALLOWED_PERSON_DEPARTMENTS = new Set(["Acting", "Directing"]);
+const MAX_ARTICLE_AGE_DAYS = 21;
 
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
@@ -116,6 +117,8 @@ interface ClusteredArticle {
   lang: string;
 }
 
+type ImageQuality = "high" | "medium" | "low" | null;
+
 export interface PersonSnippet {
   id: number;
   name: string;
@@ -133,7 +136,7 @@ export interface NewsArticle {
   source: string;
   focus: string;
   image?: string;
-  image_quality: "high" | "medium" | "low" | null;
+  image_quality: ImageQuality;
   person?: PersonSnippet;
   category: NewsCategory;
   category_label: string;
@@ -292,10 +295,10 @@ function imageScore(candidate: ImageCandidate) {
 
 function pickBestImage(candidates: ImageCandidate[]): {
   image: string | undefined;
-  imageQuality: "high" | "medium" | "low" | null;
+  imageQuality: ImageQuality;
 } {
   if (candidates.length === 0) {
-    return { image: undefined, imageQuality: null as "high" | "medium" | "low" | null };
+    return { image: undefined, imageQuality: null };
   }
 
   const best = [...candidates].sort((left, right) => imageScore(right) - imageScore(left))[0];
@@ -306,6 +309,11 @@ function pickBestImage(candidates: ImageCandidate[]): {
     : "low";
 
   return { image: best.url, imageQuality };
+}
+
+function articleAgeIsFresh(timestamp: number) {
+  if (!timestamp) return true;
+  return Date.now() - timestamp <= MAX_ARTICLE_AGE_DAYS * 24 * 60 * 60 * 1000;
 }
 
 async function fetchRSS(source: SourceMeta): Promise<RawArticle[]> {
@@ -360,7 +368,7 @@ async function fetchRSS(source: SourceMeta): Promise<RawArticle[]> {
         lang: source.lang,
         imageCandidates: extractImageCandidates(item),
       };
-    }).filter((article) => article.title && article.link);
+    }).filter((article) => article.title && article.link && articleAgeIsFresh(article.publishedAt));
   } catch {
     clearTimeout(timeout);
     return [];
@@ -465,6 +473,22 @@ function buildTopicKey(article: RawArticle, entityHints: string[], category: New
   return `${category}:${tokens.join("-")}`;
 }
 
+function topicTokens(article: RankedArticle) {
+  return normalizeSpace(article.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2 && !STOPWORDS.has(token))
+    .slice(0, 10);
+}
+
+function overlapScore(left: string[], right: string[]) {
+  if (left.length === 0 || right.length === 0) return 0;
+  const rightSet = new Set(right);
+  const shared = left.filter((token) => rightSet.has(token)).length;
+  return shared / Math.min(left.length, right.length);
+}
+
 function rankArticles(articles: RawArticle[]) {
   return articles.map((article): RankedArticle => {
     const category = categoryFromArticle(article);
@@ -532,6 +556,59 @@ function clusterArticles(articles: RankedArticle[]) {
     });
 }
 
+function mergeSimilarClusters(clusters: ClusteredArticle[]) {
+  const merged: ClusteredArticle[] = [];
+
+  for (const cluster of clusters) {
+    const currentTokens = topicTokens(cluster.lead);
+    const currentEntities = new Set(cluster.lead.entityHints.map((value) => value.toLowerCase()));
+    const targetIndex = merged.findIndex((candidate) => {
+      if (candidate.category !== cluster.category) return false;
+      const candidateTokens = topicTokens(candidate.lead);
+      const candidateEntities = new Set(candidate.lead.entityHints.map((value) => value.toLowerCase()));
+      const entityOverlap = [...currentEntities].some((value) => candidateEntities.has(value));
+      const tokenOverlap = overlapScore(currentTokens, candidateTokens);
+      return entityOverlap || tokenOverlap >= 0.62;
+    });
+
+    if (targetIndex === -1) {
+      merged.push(cluster);
+      continue;
+    }
+
+    const target = merged[targetIndex];
+    const combinedStories = [target.lead, ...target.related, cluster.lead, ...cluster.related]
+      .sort((left, right) => {
+        if (right.interestScore !== left.interestScore) return right.interestScore - left.interestScore;
+        return right.publishedAt - left.publishedAt;
+      });
+    const lead = combinedStories[0];
+    const related = combinedStories.slice(1);
+    const sources = Array.from(new Set([...target.sources, ...cluster.sources]));
+    const images = combinedStories.flatMap((story) => story.imageCandidates);
+    const bestImage = pickBestImage(images);
+
+    merged[targetIndex] = {
+      lead,
+      related,
+      sources,
+      category: lead.category,
+      categoryLabel: lead.categoryLabel,
+      interestScore: Math.max(target.interestScore, cluster.interestScore) + Math.min(sources.length - 1, 4) * 3,
+      image: bestImage.image,
+      imageQuality: bestImage.imageQuality,
+      topicKey: lead.topicKey,
+      relatedTitles: related.slice(0, 4).map((story) => story.title),
+      lang: lead.lang,
+    };
+  }
+
+  return merged.sort((left, right) => {
+    if (right.interestScore !== left.interestScore) return right.interestScore - left.interestScore;
+    return right.lead.publishedAt - left.lead.publishedAt;
+  });
+}
+
 async function fetchOGImage(url: string): Promise<ImageCandidate | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
@@ -544,7 +621,9 @@ async function fetchOGImage(url: string): Promise<ImageCandidate | null> {
     if (!res.ok) return null;
     const html = await res.text();
     const imageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image["']/i)
+      || html.match(/<meta[^>]+name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)
+      || html.match(/<link[^>]+rel=["']image_src["'][^>]*href=["']([^"']+)["']/i);
     if (!imageMatch?.[1]?.startsWith("http")) return null;
     const widthMatch = html.match(/<meta[^>]+property=["']og:image:width["'][^>]*content=["']([^"']+)["']/i);
     const heightMatch = html.match(/<meta[^>]+property=["']og:image:height["'][^>]*content=["']([^"']+)["']/i);
@@ -569,10 +648,15 @@ const getCachedOgImage = unstable_cache(
 async function enrichClusterImages(clusters: ClusteredArticle[]) {
   return Promise.all(
     clusters.map(async (cluster, index) => {
-      if (cluster.image || index >= OG_IMAGE_FALLBACK_LIMIT) return cluster;
+      if (index >= OG_IMAGE_ENRICH_LIMIT) return cluster;
+      if (cluster.imageQuality === "high") return cluster;
       const fallback = await getCachedOgImage(cluster.lead.link);
       if (!fallback) return cluster;
-      const picked = pickBestImage([fallback]);
+      const picked = pickBestImage([
+        ...(cluster.lead.imageCandidates ?? []),
+        fallback,
+      ]);
+      if (!picked.image) return cluster;
       return {
         ...cluster,
         image: picked.image,
@@ -816,7 +900,7 @@ const getClusteredNewsFeed = unstable_cache(
   async () => {
     const rawArticles = await getRawNewsFeed();
     const ranked = rankArticles(rawArticles);
-    const clusters = clusterArticles(ranked);
+    const clusters = mergeSimilarClusters(clusterArticles(ranked));
     return enrichClusterImages(clusters);
   },
   ["clustered-news-feed-v1"],
@@ -825,7 +909,7 @@ const getClusteredNewsFeed = unstable_cache(
 
 async function buildNewsPage(page: number, pageSize: number, forceRefresh: boolean): Promise<NewsResponse> {
   const clustered = forceRefresh
-    ? await enrichClusterImages(clusterArticles(rankArticles(await buildRawNewsFeed())))
+    ? await enrichClusterImages(mergeSimilarClusters(clusterArticles(rankArticles(await buildRawNewsFeed()))))
     : await getClusteredNewsFeed();
   const start = Math.max(0, (page - 1) * pageSize);
   const pageItems = clustered.slice(start, start + pageSize);
