@@ -11,7 +11,7 @@ const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 30;
 const RAW_NEWS_LIMIT = 120;
 const OG_IMAGE_FALLBACK_LIMIT = 10;
-const CLAUDE_BATCH_SIZE = 10;
+const CLAUDE_BATCH_SIZE = 6;
 const ALLOWED_PERSON_DEPARTMENTS = new Set(["Acting", "Directing"]);
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
@@ -100,6 +100,19 @@ function buildFallbackBody(article: RawArticle): string {
     return `${article.source} zveřejnil recenzi k titulu ${article.title}.`;
   }
   return `${article.source} přinesl novou zprávu ze světa filmu k tématu ${article.title}.`;
+}
+
+function buildLocalArticle(article: RawArticle): NewsArticle {
+  return {
+    title_cs: decodeHtmlEntities(article.title.trim()),
+    body_cs: decodeHtmlEntities(buildFallbackBody(article).trim()),
+    title_en: article.title,
+    link: article.link,
+    pubDate: article.pubDate,
+    source: article.source,
+    focus: article.focus,
+    image: article.image,
+  };
 }
 
 function extractImage(item: Record<string, unknown>): string | undefined {
@@ -296,14 +309,22 @@ const getCachedPersonByName = unstable_cache(
 );
 
 async function translateSingleArticle(article: RawArticle, client: Anthropic, tmdbKey: string): Promise<NewsArticle> {
-  const prompt = `Jsi filmový redaktor pro českou filmovou komunitu.
+  const prompt = `Jsi zkušený český filmový editor.
 
-Přelož a přepiš následující filmovou zprávu do češtiny.
-- "title_cs": český nadpis, max 12 slov, žádná angličtina, žádné HTML entity
-- "body_cs": 3-5 vět v češtině, novinářský styl, přirozená a idiomatická čeština, správná diakritika, žádné HTML entity
-- "person_name": pokud jde primárně o herce nebo režiséra, vrať celé jméno v angličtině, jinak null
+Přelož a redakčně přepiš následující filmovou zprávu do přirozené češtiny.
+
+Pravidla:
+- zachovej fakta přesně, nic si nevymýšlej
+- nepřekládej doslova z angličtiny a nepoužívej kostrbaté vazby
+- nepřidávej žádné informace, které v textu nejsou
+- vztahy mezi lidmi překládej přesně; například "girlfriend's son" je "syn partnerky", ne "syn známé"
+- u českého nadpisu používej spisovnou, stručnou a přirozenou češtinu
+- žádné HTML entity, žádný markdown
 
 Vrať POUZE validní JSON objekt se strukturou {"title_cs":"","body_cs":"","person_name":null}
+- "title_cs": český nadpis, max 12 slov
+- "body_cs": 2-4 věty v přirozené češtině se správnou diakritikou
+- "person_name": pokud jde primárně o herce nebo režiséra, vrať celé jméno v angličtině, jinak null
 
 ${JSON.stringify({
   title: article.title,
@@ -316,6 +337,7 @@ ${JSON.stringify({
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 500,
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
     const raw = msg.content[0].type === "text" ? msg.content[0].text : "";
@@ -336,16 +358,7 @@ ${JSON.stringify({
       person: person ?? undefined,
     };
   } catch {
-    return {
-      title_cs: article.title,
-      body_cs: buildFallbackBody(article),
-      title_en: article.title,
-      link: article.link,
-      pubDate: article.pubDate,
-      source: article.source,
-      focus: article.focus,
-      image: article.image,
-    };
+    return buildLocalArticle(article);
   }
 }
 
@@ -358,14 +371,22 @@ async function generateArticleBatch(articles: RawArticle[], client: Anthropic, t
     lang: article.lang,
   }));
 
-  const prompt = `Jsi filmový redaktor pro českou filmovou komunitu.
+  const prompt = `Jsi zkušený český filmový editor.
 
-Pro každou položku vrať:
-- "title_cs": český nadpis, max 12 slov, bez angličtiny a bez HTML entit
-- "body_cs": 3-5 vět v češtině, novinářský styl, přirozená a idiomatická čeština, správná diakritika, bez HTML entit
+Pro každou položku vrať finální českou verzi zprávy.
+
+Přísná pravidla:
+- zachovej fakta přesně a nic si nevymýšlej
+- nepřekládej doslova z angličtiny
+- piš stručnou, přirozenou a idiomatickou češtinou
+- vyhýbej se kostrbatým formulacím typu "syn své známé", "vzít mikrofon", "dojde k odejití"
+- vztahy mezi lidmi a okolnosti překladu formuluj přesně podle textu
+- žádné HTML entity, žádný markdown, žádná angličtina v českém titulku
+
+Vrať POUZE validní JSON pole s klíči "i","title_cs","body_cs","person_name".
+- "title_cs": max 12 slov, zpravodajský český nadpis
+- "body_cs": 2-4 věty v přirozené spisovné češtině
 - "person_name": pokud je hlavním tématem konkrétní herec nebo režisér, vrať celé jméno v angličtině, jinak null
-
-Nepiš markdown ani komentář. Vrať POUZE validní JSON pole s klíči "i","title_cs","body_cs","person_name".
 
 ${JSON.stringify(payload)}`;
 
@@ -373,6 +394,7 @@ ${JSON.stringify(payload)}`;
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2800,
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
     const raw = msg.content[0].type === "text" ? msg.content[0].text : "";
@@ -443,22 +465,25 @@ const getCachedGeneratedBatch = unstable_cache(
     const articles = JSON.parse(batchPayload) as RawArticle[];
 
     if (!(anthropic && tmdb)) {
-      return articles.map((article) => ({
-        title_cs: article.title,
-        body_cs: buildFallbackBody(article),
-        title_en: article.title,
-        link: article.link,
-        pubDate: article.pubDate,
-        source: article.source,
-        focus: article.focus,
-        image: article.image,
-      }));
+      return articles.map((article) => buildLocalArticle(article));
     }
 
     const client = new Anthropic({ apiKey: anthropic });
-    return generateArticleBatch(articles, client, tmdb);
+    const translatedArticles = await generateArticleBatch(
+      articles.filter((article) => article.lang !== "cs"),
+      client,
+      tmdb
+    );
+
+    const translatedByLink = new Map(translatedArticles.map((article) => [article.link, article]));
+
+    return articles.map((article) =>
+      article.lang === "cs"
+        ? buildLocalArticle(article)
+        : translatedByLink.get(article.link) ?? buildLocalArticle(article)
+    );
   },
-  ["news-batch-v1"],
+  ["news-batch-v2"],
   { revalidate: 604800 }
 );
 
@@ -493,7 +518,7 @@ const getCachedNewsPage = unstable_cache(
       total: allArticles.length,
     };
   },
-  ["news-page-v5"],
+  ["news-page-v6"],
   { revalidate: 900 }
 );
 
