@@ -24,18 +24,18 @@ export default function AppShell() {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[color:var(--line)] bg-[color:rgba(255,253,248,0.9)] backdrop-blur-md">
-        <div className="mx-auto flex max-w-screen-2xl flex-wrap items-center gap-4 px-4 py-3">
+        <div className="mx-auto flex max-w-screen-2xl flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
           <div className="flex items-center gap-2.5">
             <div className="rounded-xl bg-[color:var(--accent-soft)] p-1.5">
               <Film className="h-5 w-5 text-[color:var(--accent)]" />
             </div>
-            <span className="text-base font-bold text-[color:var(--foreground)]">Movie Releases</span>
+            <span className="text-sm font-bold text-[color:var(--foreground)] sm:text-base">Movie Releases</span>
           </div>
           <TabNav active={tab} onChange={setTab} />
         </div>
       </header>
 
-      <div className="mx-auto max-w-screen-2xl px-4 py-8">
+      <div className="mx-auto max-w-screen-2xl px-4 py-5 sm:py-8">
         <section className={tab === "news" ? "block" : "hidden"}>
           <NewsTab />
         </section>

@@ -93,7 +93,7 @@ function PersonSnippet({
         event.stopPropagation();
         onClickPerson(person.id);
       }}
-      className="group mt-3 flex w-full items-center gap-4 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[color:var(--surface-muted)]"
+      className="group mt-3 flex w-full items-center gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[color:var(--surface-muted)] sm:gap-4 sm:px-5"
     >
       <div className="h-20 w-16 flex-shrink-0 overflow-hidden rounded-2xl bg-[color:var(--surface-muted)] shadow-sm">
         {person.photo ? (
@@ -105,7 +105,7 @@ function PersonSnippet({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[1.1rem] font-semibold leading-tight text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
+        <p className="text-base font-semibold leading-tight text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)] sm:text-[1.1rem]">
           {person.name}
         </p>
         <p className="mt-1 text-sm text-[color:var(--muted)]">{localizeKnownFor(person.known_for)}</p>
@@ -156,9 +156,9 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(29,42,36,0.28)] p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(29,42,36,0.28)] p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
         <div
-          className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl"
+          className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-[1.75rem] border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
           onClick={(event) => event.stopPropagation()}
         >
           <button
@@ -169,21 +169,21 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
           </button>
 
           {article.image && (
-            <div className="h-56 w-full overflow-hidden rounded-t-2xl">
+            <div className="h-44 w-full overflow-hidden rounded-t-[1.75rem] sm:h-56 sm:rounded-t-2xl">
               <img src={article.image} alt="" className="h-full w-full object-cover" />
             </div>
           )}
 
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-0.5 text-xs font-medium text-[color:var(--foreground)]">
                 {article.source}
               </span>
               <span className="text-xs text-[color:var(--muted)]">{article.focus}</span>
-              {article.pubDate && <span className="ml-auto text-xs text-[color:var(--muted)]">{timeAgo(article.pubDate)}</span>}
+              {article.pubDate && <span className="text-xs text-[color:var(--muted)] sm:ml-auto">{timeAgo(article.pubDate)}</span>}
             </div>
 
-            <h2 className="mb-3 text-xl font-bold leading-snug text-[color:var(--foreground)]">{article.title_cs}</h2>
+            <h2 className="mb-3 text-lg font-bold leading-snug text-[color:var(--foreground)] sm:text-xl">{article.title_cs}</h2>
             <p className="text-sm leading-relaxed text-[color:var(--foreground)]">{article.body_cs}</p>
 
             {article.person && (
@@ -250,7 +250,7 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
 
         <div className="flex flex-1 flex-col p-4">
           <p className="mb-2 text-xs text-[color:var(--muted)]">{article.focus}</p>
-          <h3 className="mb-2 text-lg font-semibold leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
+          <h3 className="mb-2 text-base font-semibold leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)] sm:text-lg">
             {article.title_cs}
           </h3>
           <p className="line-clamp-4 flex-1 text-sm leading-relaxed text-[color:var(--muted)]">{article.body_cs}</p>
@@ -311,7 +311,7 @@ export default function NewsTab() {
 
     try {
       const res = await fetch(`/api/news?page=${nextPage}&pageSize=${PAGE_SIZE}`);
-      if (!res.ok) throw new Error("Chyba nacitani");
+      if (!res.ok) throw new Error("Chyba načítání");
       const payload = await res.json() as NewsResponse;
 
       setArticles((current) => {
@@ -385,7 +385,7 @@ export default function NewsTab() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[color:var(--foreground)]">
           <Clapperboard className="h-5 w-5 text-[color:var(--accent)]" />
           Filmové novinky
@@ -397,7 +397,7 @@ export default function NewsTab() {
         <button
           onClick={() => void refresh()}
           disabled={loadingInitial || loadingMore}
-          className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50 sm:w-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loadingInitial || loadingMore ? "animate-spin" : ""}`} />
           Aktualizovat
@@ -405,18 +405,20 @@ export default function NewsTab() {
       </div>
 
       {SOURCE_FILTERS.length > 1 && (
-        <div className="mb-5 flex flex-wrap gap-2">
-          {SOURCE_FILTERS.map((source) => (
-            <button
-              key={source}
-              onClick={() => setFilter(source)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                filter === source ? "bg-[color:var(--accent)] text-white" : "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)]"
-              }`}
-            >
-              {source === "vse" ? "vse" : source}
-            </button>
-          ))}
+        <div className="mb-5 -mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex min-w-max gap-2 pb-1">
+            {SOURCE_FILTERS.map((source) => (
+              <button
+                key={source}
+                onClick={() => setFilter(source)}
+                className={`min-h-10 whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  filter === source ? "bg-[color:var(--accent)] text-white" : "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)]"
+                }`}
+              >
+                {source === "vse" ? "vše" : source}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -456,7 +458,7 @@ export default function NewsTab() {
         <div className="flex justify-center py-4">
           <button
             onClick={() => void loadNextPage()}
-            className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-2 text-sm text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]"
+            className="min-h-11 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-2 text-sm text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]"
           >
             Načíst dalších 30
           </button>

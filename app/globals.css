@@ -19,9 +19,11 @@
 }
 
 html {
+  -webkit-text-size-adjust: 100%;
   background:
     radial-gradient(circle at top left, #fffaf0 0%, rgba(255, 250, 240, 0) 38%),
     linear-gradient(180deg, #f7f3eb 0%, #f1eadf 100%);
+  color-scheme: light;
 }
 
 body {
@@ -29,4 +31,5 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
 }

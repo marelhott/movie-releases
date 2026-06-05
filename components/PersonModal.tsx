@@ -33,7 +33,7 @@ function FilmCard({ film }: { film: FilmItem }) {
       href={`https://www.themoviedb.org/movie/${film.id}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex-shrink-0 w-28"
+      className="group w-24 flex-shrink-0 sm:w-28"
     >
       <div className="relative mb-1.5 aspect-[2/3] overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
         {film.poster && !err ? (
@@ -76,8 +76,8 @@ export default function PersonModal({ personId, onClose }: { personId: number; o
   }, [personId]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(29,42,36,0.28)] p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[rgba(29,42,36,0.28)] p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+      <div className="relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-[1.75rem] border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute right-3 top-3 z-10 rounded-full bg-white/80 p-1.5 text-[color:var(--foreground)] hover:bg-white">
           <X className="w-5 h-5" />
         </button>
@@ -89,9 +89,9 @@ export default function PersonModal({ personId, onClose }: { personId: number; o
         )}
 
         {data && (
-          <div className="p-6">
-            <div className="flex gap-5 mb-6">
-              <div className="h-36 w-28 flex-shrink-0 overflow-hidden rounded-xl bg-[color:var(--surface-muted)]">
+          <div className="p-4 sm:p-6">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:gap-5">
+              <div className="h-32 w-24 flex-shrink-0 overflow-hidden rounded-xl bg-[color:var(--surface-muted)] sm:h-36 sm:w-28">
                 {data.photo ? (
                   <Image src={data.photo} alt={data.name} width={112} height={144} className="object-cover w-full h-full" />
                 ) : (
@@ -101,7 +101,7 @@ export default function PersonModal({ personId, onClose }: { personId: number; o
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-2xl font-bold text-[color:var(--foreground)]">{data.name}</h2>
+                <h2 className="text-xl font-bold text-[color:var(--foreground)] sm:text-2xl">{data.name}</h2>
                 <p className="mt-0.5 text-sm text-[color:var(--accent)]">{data.known_for}</p>
                 <div className="mt-2 flex flex-wrap gap-3 text-sm text-[color:var(--muted)]">
                   {data.birthday && (
@@ -112,17 +112,17 @@ export default function PersonModal({ personId, onClose }: { personId: number; o
                   )}
                 </div>
                 {data.biography && (
-                  <p className="mt-3 line-clamp-4 text-sm text-[color:var(--muted)]">{data.biography}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-[color:var(--muted)]">{data.biography}</p>
                 )}
               </div>
             </div>
 
             {/* Tabs */}
             {data.directed.length > 0 && data.acted.length > 0 && (
-              <div className="flex gap-2 mb-4">
+              <div className="mb-4 flex flex-wrap gap-2">
                 {(["directed", "acted"] as const).map(t => (
                   <button key={t} onClick={() => setTab(t)}
-                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === t ? "bg-[color:var(--accent)] text-white" : "text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)] hover:text-[color:var(--foreground)]"}`}>
+                    className={`min-h-11 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${tab === t ? "bg-[color:var(--accent)] text-white" : "text-[color:var(--muted)] hover:bg-[color:var(--surface-muted)] hover:text-[color:var(--foreground)]"}`}>
                     {t === "directed" ? `Režie (${data.directed.length})` : `Jako herec (${data.acted.length})`}
                   </button>
                 ))}

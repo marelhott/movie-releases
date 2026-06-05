@@ -33,7 +33,7 @@ export default function MovieCard({ movie }: { movie: Movie }) {
           )}
 
           {/* Hover overlay */}
-          <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-[rgba(29,42,36,0.92)] via-[rgba(29,42,36,0.18)] to-transparent p-2.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <div className="absolute inset-0 hidden flex-col justify-end bg-gradient-to-t from-[rgba(29,42,36,0.92)] via-[rgba(29,42,36,0.18)] to-transparent p-2.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100 sm:flex">
             {movie.overview && <p className="line-clamp-4 text-xs text-stone-100">{movie.overview}</p>}
           </div>
 
@@ -53,15 +53,15 @@ export default function MovieCard({ movie }: { movie: Movie }) {
         </div>
 
         {/* Info */}
-        <div className="space-y-0.5 p-2.5">
-          <h3 className="line-clamp-2 text-xs font-semibold leading-tight text-[color:var(--foreground)]">{movie.title}</h3>
+        <div className="space-y-1 p-2.5 sm:space-y-0.5">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-[color:var(--foreground)] sm:text-xs">{movie.title}</h3>
           {movie.czech_title && (
             <p className="line-clamp-1 text-xs text-[color:var(--muted)]">{movie.czech_title}</p>
           )}
-          <div className="flex items-center justify-between pt-1">
-            <div className="flex items-center gap-2 text-xs text-[color:var(--muted)]">
+          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
               <span className="flex items-center gap-0.5"><Calendar className="w-2.5 h-2.5" />{movie.year}</span>
-              {movie.runtime > 0 && <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{movie.runtime}m</span>}
+              {movie.runtime > 0 && <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{movie.runtime} min</span>}
             </div>
             {movie.ratings.imdb && (
               <span className="flex items-center gap-0.5">

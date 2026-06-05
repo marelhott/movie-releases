@@ -96,7 +96,7 @@ export default function MovieGrid() {
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between gap-4">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[color:var(--foreground)]">
           <Sparkles className="h-5 w-5 text-[color:var(--accent)]" />
           Nové filmy
@@ -105,7 +105,7 @@ export default function MovieGrid() {
         <button
           onClick={() => void refresh()}
           disabled={loading}
-          className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+          className="min-h-11 w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50 sm:w-auto"
         >
           Aktualizovat
         </button>
@@ -123,7 +123,7 @@ export default function MovieGrid() {
       {!loading && hasMore && movies.length > 0 && (
         <div className="flex justify-center mt-10">
           <button onClick={() => { const n = page + 1; void loadMovies(n, "append"); }}
-            className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-8 py-3 font-medium text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]">
+            className="min-h-11 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-8 py-3 font-medium text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]">
             Načíst další
           </button>
         </div>

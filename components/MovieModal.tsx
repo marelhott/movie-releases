@@ -14,18 +14,18 @@ const SOURCE_LABELS: Record<string, string> = {
 function CastCard({ member, onClick }: { member: CastMember; onClick?: () => void }) {
   const [err, setErr] = useState(false);
   return (
-    <button onClick={onClick} className="flex-shrink-0 w-20 text-left group">
-      <div className="relative w-20 h-24 rounded-lg overflow-hidden bg-zinc-800 mb-1">
+    <button onClick={onClick} className="group w-20 flex-shrink-0 text-left">
+      <div className="relative mb-1 h-24 w-20 overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
         {member.photo && !err ? (
           <Image src={member.photo} alt={member.name} fill className="object-cover group-hover:scale-105 transition-transform" onError={() => setErr(true)} sizes="80px" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-zinc-600">
-            <Film className="w-5 h-5" />
-          </div>
-        )}
-      </div>
-      <p className="text-xs text-zinc-300 line-clamp-2 leading-tight group-hover:text-white">{member.name}</p>
-      {member.character && <p className="text-xs text-zinc-500 line-clamp-1 italic">{member.character}</p>}
+            <div className="absolute inset-0 flex items-center justify-center text-[color:var(--muted)]">
+              <Film className="w-5 h-5" />
+            </div>
+          )}
+        </div>
+      <p className="line-clamp-2 text-xs leading-tight text-[color:var(--foreground)] group-hover:text-[color:var(--accent)]">{member.name}</p>
+      {member.character && <p className="line-clamp-1 text-xs italic text-[color:var(--muted)]">{member.character}</p>}
     </button>
   );
 }
@@ -44,12 +44,12 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(29,42,36,0.28)] p-4 backdrop-blur-sm" onClick={onClose}>
-        <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(29,42,36,0.28)] p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+        <div className="relative max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-[1.75rem] border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl sm:max-h-[90vh] sm:rounded-2xl" onClick={e => e.stopPropagation()}>
 
           {/* Backdrop */}
           {movie.backdrop && (
-            <div className="relative h-48 w-full overflow-hidden rounded-t-2xl">
+            <div className="relative h-36 w-full overflow-hidden rounded-t-[1.75rem] sm:h-48 sm:rounded-t-2xl">
               <Image src={movie.backdrop} alt="" fill className="object-cover opacity-60" />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[color:var(--surface)]" />
             </div>
@@ -59,21 +59,21 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
             <X className="w-5 h-5" />
           </button>
 
-          <div className={`flex gap-6 px-6 pb-6 ${movie.backdrop ? "-mt-16 relative" : "pt-6"}`}>
+          <div className={`relative flex flex-col gap-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6 ${movie.backdrop ? "-mt-10 sm:-mt-16" : "pt-4 sm:pt-6"}`}>
             {/* Poster */}
-            <div className="flex-shrink-0 w-32 hidden sm:block">
+            <div className="w-24 flex-shrink-0 self-center sm:block sm:w-32 sm:self-auto">
               <div className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-xl ring-2 ring-white/10">
                 {movie.poster ? (
                   <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
                 ) : (
-                  <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs text-center p-2">{movie.title}</div>
+                    <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--surface-muted)] p-2 text-center text-xs text-[color:var(--muted)]">{movie.title}</div>
                 )}
               </div>
             </div>
 
             {/* Details */}
-            <div className="flex-1 min-w-0 pt-16 sm:pt-0">
-              <h2 className="text-2xl font-bold leading-tight text-[color:var(--foreground)]">{movie.title}</h2>
+            <div className="min-w-0 flex-1 pt-0 sm:pt-0">
+              <h2 className="text-xl font-bold leading-tight text-[color:var(--foreground)] sm:text-2xl">{movie.title}</h2>
               {movie.czech_title && <p className="mt-0.5 text-[color:var(--muted)]">{movie.czech_title}</p>}
 
               <div className="mt-3 flex flex-wrap gap-3 text-sm text-[color:var(--muted)]">
@@ -165,7 +165,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               )}
 
               {/* Links */}
-              <div className="flex gap-3 mt-5">
+              <div className="mt-5 flex flex-wrap gap-3">
                 {movie.imdb_code && (
                   <a href={`https://www.imdb.com/title/${movie.imdb_code}`} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 rounded-lg bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-700 transition-colors hover:bg-yellow-500/20">
