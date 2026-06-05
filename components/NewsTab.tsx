@@ -60,6 +60,17 @@ const newsCache: NewsCache = {
   hydrated: false,
 };
 
+function localizeKnownFor(value: string) {
+  switch (value) {
+    case "Acting":
+      return "Herectví";
+    case "Directing":
+      return "Režie";
+    default:
+      return value;
+  }
+}
+
 function timeAgo(value: string) {
   if (!value) return "";
   try {
@@ -82,9 +93,9 @@ function PersonSnippet({
         event.stopPropagation();
         onClickPerson(person.id);
       }}
-      className="group mt-3 flex w-full items-center gap-3 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] p-2.5 text-left transition-colors hover:bg-[color:var(--surface-muted)]"
+      className="group mt-3 flex w-full items-center gap-4 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[color:var(--surface-muted)]"
     >
-      <div className="h-12 w-10 flex-shrink-0 overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
+      <div className="h-20 w-16 flex-shrink-0 overflow-hidden rounded-2xl bg-[color:var(--surface-muted)] shadow-sm">
         {person.photo ? (
           <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
         ) : (
@@ -94,19 +105,22 @@ function PersonSnippet({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
+        <p className="text-[1.1rem] font-semibold leading-tight text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
           {person.name}
         </p>
-        <p className="text-xs text-[color:var(--muted)]">{person.known_for}</p>
+        <p className="mt-1 text-sm text-[color:var(--muted)]">{localizeKnownFor(person.known_for)}</p>
         {person.top_films.length > 0 && (
-          <div className="mt-1.5 flex gap-1 overflow-x-auto">
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {person.top_films.slice(0, 4).map((film, index) => (
-              <div key={`${film.title}-${index}`} className="h-11 w-8 flex-shrink-0 overflow-hidden rounded bg-[color:var(--surface-muted)]">
+              <div
+                key={`${film.title}-${index}`}
+                className="h-16 w-11 flex-shrink-0 overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] shadow-sm"
+                title={`${film.title} (${film.year})`}
+              >
                 {film.poster ? (
                   <img
                     src={film.poster}
                     alt={film.title}
-                    title={`${film.title} (${film.year})`}
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -119,7 +133,7 @@ function PersonSnippet({
           </div>
         )}
       </div>
-      <ChevronRight className="h-4 w-4 flex-shrink-0 text-zinc-500" />
+      <ChevronRight className="h-5 w-5 flex-shrink-0 text-[color:var(--muted)] transition-colors group-hover:text-[color:var(--accent)]" />
     </button>
   );
 }
@@ -174,7 +188,7 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
 
             {article.person && (
               <div className="mt-4">
-                <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">O kom je rec</p>
+                <p className="mb-3 text-xs uppercase tracking-[0.24em] text-[color:var(--muted)]">O kom je řeč</p>
                 <PersonSnippet person={article.person} onClickPerson={setPersonId} />
               </div>
             )}
@@ -374,9 +388,9 @@ export default function NewsTab() {
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="flex items-center gap-2 text-lg font-bold text-[color:var(--foreground)]">
           <Clapperboard className="h-5 w-5 text-[color:var(--accent)]" />
-          Filmove novinky
+          Filmové novinky
           {articles.length > 0 && (
-            <span className="text-sm font-normal text-[color:var(--muted)]">{filteredArticles.length} zprav</span>
+            <span className="text-sm font-normal text-[color:var(--muted)]">{filteredArticles.length} zpráv</span>
           )}
         </h2>
 
@@ -444,13 +458,13 @@ export default function NewsTab() {
             onClick={() => void loadNextPage()}
             className="rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-2 text-sm text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]"
           >
-            Nacist dalsich 30
+            Načíst dalších 30
           </button>
         </div>
       )}
 
       {!hasMore && articles.length > 0 && (
-        <p className="py-6 text-center text-sm text-[color:var(--muted)]">Dosel jsem na konec filmoveho feedu.</p>
+        <p className="py-6 text-center text-sm text-[color:var(--muted)]">Došel jsem na konec filmového feedu.</p>
       )}
 
       {selected && <ArticleModal article={selected} onClose={() => setSelected(null)} />}

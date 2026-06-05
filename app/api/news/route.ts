@@ -30,12 +30,12 @@ const getKeys = () => ({
 
 const RSS_SOURCES = [
   { url: "https://deadline.com/v/film/feed/", name: "Deadline", focus: "breaking news, castingy & box office", lang: "en" },
-  { url: "https://variety.com/c/film/feed/", name: "Variety", focus: "prumysl & business", lang: "en" },
+  { url: "https://variety.com/c/film/feed/", name: "Variety", focus: "průmysl & business", lang: "en" },
   { url: "https://www.hollywoodreporter.com/c/movies/movie-news/feed/", name: "Hollywood Reporter", focus: "festivaly, rozhovory & awards", lang: "en" },
-  { url: "https://www.indiewire.com/c/film/feed/", name: "IndieWire", focus: "indie & autorsky film", lang: "en" },
-  { url: "https://www.moviezone.cz/rss/", name: "MovieZone.cz", focus: "ceske trailery & novinky", lang: "cs" },
-  { url: "https://www.screendaily.com/1366.rss", name: "Screen Daily", focus: "evropsky filmovy byznys, festivaly & severske tituly", lang: "en" },
-  { url: "https://www.filmneweurope.com/?format=feed&type=rss", name: "Film New Europe", focus: "nove evropske filmy & regionalni produkce", lang: "en" },
+  { url: "https://www.indiewire.com/c/film/feed/", name: "IndieWire", focus: "indie & autorský film", lang: "en" },
+  { url: "https://www.moviezone.cz/rss/", name: "MovieZone.cz", focus: "české trailery & novinky", lang: "cs" },
+  { url: "https://www.screendaily.com/1366.rss", name: "Screen Daily", focus: "evropský filmový byznys, festivaly & severské tituly", lang: "en" },
+  { url: "https://www.filmneweurope.com/?format=feed&type=rss", name: "Film New Europe", focus: "nové evropské filmy & regionální produkce", lang: "en" },
 ] as const;
 
 interface RawArticle {
@@ -94,12 +94,12 @@ function stripHtml(html: string, maxLen = 900): string {
 function buildFallbackBody(article: RawArticle): string {
   if (article.description) return article.description;
   if (article.link.includes("/trailery")) {
-    return `${article.source} prinesl novy trailer k titulu ${article.title}.`;
+    return `${article.source} přinesl nový trailer k titulu ${article.title}.`;
   }
   if (article.link.includes("/recenze")) {
-    return `${article.source} zverejnil recenzi k titulu ${article.title}.`;
+    return `${article.source} zveřejnil recenzi k titulu ${article.title}.`;
   }
-  return `${article.source} prinesl novou zpravu ze sveta filmu k tematu ${article.title}.`;
+  return `${article.source} přinesl novou zprávu ze světa filmu k tématu ${article.title}.`;
 }
 
 function extractImage(item: Record<string, unknown>): string | undefined {
@@ -296,14 +296,14 @@ const getCachedPersonByName = unstable_cache(
 );
 
 async function translateSingleArticle(article: RawArticle, client: Anthropic, tmdbKey: string): Promise<NewsArticle> {
-  const prompt = `Jsi filmovy redaktor pro ceskou filmovou komunitu.
+  const prompt = `Jsi filmový redaktor pro českou filmovou komunitu.
 
-Preloz a prepis nasledujici filmovou zpravu do cestiny.
-- "title_cs": cesky nadpis, max 12 slov, zadna anglictina, zadne HTML entity
-- "body_cs": 3-5 vet v cestine, novinarsky styl, zadne HTML entity
-- "person_name": pokud jde primarne o herce nebo rezisera, vrat cele jmeno v anglictine, jinak null
+Přelož a přepiš následující filmovou zprávu do češtiny.
+- "title_cs": český nadpis, max 12 slov, žádná angličtina, žádné HTML entity
+- "body_cs": 3-5 vět v češtině, novinářský styl, správná čeština i diakritika, žádné HTML entity
+- "person_name": pokud jde primárně o herce nebo režiséra, vrať celé jméno v angličtině, jinak null
 
-Vrat POUZE validni JSON objekt se strukturou {"title_cs":"","body_cs":"","person_name":null}
+Vrať POUZE validní JSON objekt se strukturou {"title_cs":"","body_cs":"","person_name":null}
 
 ${JSON.stringify({
   title: article.title,
@@ -358,14 +358,14 @@ async function generateArticleBatch(articles: RawArticle[], client: Anthropic, t
     lang: article.lang,
   }));
 
-  const prompt = `Jsi filmovy redaktor pro ceskou filmovou komunitu.
+  const prompt = `Jsi filmový redaktor pro českou filmovou komunitu.
 
-Pro kazdou polozku vrat:
-- "title_cs": cesky nadpis, max 12 slov, bez anglictiny a bez HTML entit
-- "body_cs": 3-5 vet v cestine, novinarsky styl, bez HTML entit
-- "person_name": pokud je hlavnim tematem konkretni herec nebo reziser, vrat cele jmeno v anglictine, jinak null
+Pro každou položku vrať:
+- "title_cs": český nadpis, max 12 slov, bez angličtiny a bez HTML entit
+- "body_cs": 3-5 vět v češtině, novinářský styl, správná čeština i diakritika, bez HTML entit
+- "person_name": pokud je hlavním tématem konkrétní herec nebo režisér, vrať celé jméno v angličtině, jinak null
 
-Nepis markdown ani komentar. Vrat POUZE validni JSON pole s klici "i","title_cs","body_cs","person_name".
+Nepiš markdown ani komentář. Vrať POUZE validní JSON pole s klíči "i","title_cs","body_cs","person_name".
 
 ${JSON.stringify(payload)}`;
 
@@ -427,7 +427,7 @@ const getRawNewsFeed = unstable_cache(
         })
     ).slice(0, RAW_NEWS_LIMIT);
   },
-  ["raw-news-feed-v2"],
+  ["raw-news-feed-v3"],
   { revalidate: 1800 }
 );
 
@@ -474,7 +474,7 @@ const getCachedNewsPage = unstable_cache(
       total: allArticles.length,
     };
   },
-  ["news-page-v2"],
+  ["news-page-v3"],
   { revalidate: 1800 }
 );
 
