@@ -2,14 +2,63 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { X, Star, Clock, Calendar, ExternalLink, Film } from "lucide-react";
-import { Movie, CastMember } from "@/types/movie";
+import { X, Clock, Calendar, ExternalLink, Film } from "lucide-react";
+import { Movie, CastMember, MovieRelease } from "@/types/movie";
 import PersonModal from "./PersonModal";
 
 const SOURCE_LABELS: Record<string, string> = {
   yts: "YTS", tmdb: "TMDB", srrdb: "SRRDB", predb: "PreDB",
   scnsrc: "ScnSrc", letterboxd: "Letterboxd",
 };
+
+function formatReleaseDate(value: string | null) {
+  if (!value) return null;
+  try {
+    return new Date(value).toLocaleString("cs-CZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
+}
+
+function ReleaseCard({ release }: { release: MovieRelease }) {
+  const badge = SOURCE_LABELS[release.source] ?? release.source.toUpperCase();
+
+  const content = (
+    <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-3 transition-colors hover:bg-[color:var(--surface)]">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-[color:var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--foreground)]">
+          {badge}
+        </span>
+        {release.quality && (
+          <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--accent)]">
+            {release.quality}
+          </span>
+        )}
+      </div>
+      <p className="text-sm font-medium leading-snug text-[color:var(--foreground)]">{release.label}</p>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--muted)]">
+        {release.group && <span>Group: {release.group}</span>}
+        {release.size && <span>Velikost: {release.size}</span>}
+        {typeof release.seeds === "number" && <span>Seeds: {release.seeds}</span>}
+        {release.date && <span>{formatReleaseDate(release.date)}</span>}
+      </div>
+    </div>
+  );
+
+  if (!release.url) return content;
+
+  return (
+    <a href={release.url} target="_blank" rel="noopener noreferrer" className="block">
+      {content}
+    </a>
+  );
+}
 
 function CastCard({ member, onClick }: { member: CastMember; onClick?: () => void }) {
   const [err, setErr] = useState(false);
@@ -159,6 +208,17 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
                         <span>{t.size}</span>
                         <span className="text-green-500">▲ {t.seeds}</span>
                       </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {movie.releases?.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Releasy</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {movie.releases.map((release, index) => (
+                      <ReleaseCard key={`${release.source}-${release.label}-${index}`} release={release} />
                     ))}
                   </div>
                 </div>

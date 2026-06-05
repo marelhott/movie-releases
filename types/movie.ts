@@ -12,6 +12,17 @@ export interface Torrent {
   seeds: number;
 }
 
+export interface MovieRelease {
+  source: string;
+  label: string;
+  quality: string | null;
+  date: string | null;
+  url: string | null;
+  size?: string | null;
+  seeds?: number | null;
+  group?: string | null;
+}
+
 export interface CastMember {
   id: number;
   name: string;
@@ -36,4 +47,5 @@ export interface Movie {
   date_added: string;
   sources: string[];
   torrents: Torrent[];
+  releases: MovieRelease[];
 }

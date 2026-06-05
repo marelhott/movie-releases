@@ -7,6 +7,8 @@ export interface SceneRelease {
   size: number;
   imdbId: string | null;
   source: string;
+  url?: string | null;
+  releaseName?: string | null;
 }
 
 function parseReleaseName(name: string) {
@@ -39,6 +41,7 @@ export async function fetchSrrdb(): Promise<SceneRelease[]> {
       const titleMatch = block.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/) ||
                          block.match(/<title>([^<]+)<\/title>/);
       const dateMatch = block.match(/<pubDate>([^<]+)<\/pubDate>/);
+      const linkMatch = block.match(/<link>([^<]+)<\/link>/);
       if (!titleMatch) continue;
       const raw = titleMatch[1].trim();
       // Skip non-movie categories (TV, music, etc.)
@@ -53,6 +56,8 @@ export async function fetchSrrdb(): Promise<SceneRelease[]> {
         size: 0,
         imdbId: null,
         source: "srrdb",
+        url: linkMatch?.[1] ?? null,
+        releaseName: raw,
       });
       if (items.length >= 20) break;
     }
@@ -77,6 +82,7 @@ export async function fetchPredb(): Promise<SceneRelease[]> {
       const titleMatch = block.match(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/) ||
                          block.match(/<title>([^<]+)<\/title>/);
       const dateMatch = block.match(/<pubDate>([^<]+)<\/pubDate>/);
+      const linkMatch = block.match(/<link>([^<]+)<\/link>/);
       if (!titleMatch) continue;
       const raw = titleMatch[1].trim();
       const { title, year, quality, group } = parseReleaseName(raw);
@@ -87,6 +93,8 @@ export async function fetchPredb(): Promise<SceneRelease[]> {
         size: 0,
         imdbId: null,
         source: "predb",
+        url: linkMatch?.[1] ?? null,
+        releaseName: raw,
       });
       if (items.length >= 20) break;
     }
@@ -110,10 +118,10 @@ export async function fetchScnsrcScene(): Promise<SceneRelease[]> {
     let match;
     while ((match = articleRe.exec(html)) !== null) {
       const block = match[1];
-      const titleMatch = block.match(/<h\d[^>]*>\s*<a[^>]+href="[^"]+"[^>]*>([^<]+)<\/a>/i);
+      const titleMatch = block.match(/<h\d[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/i);
       const dateMatch = block.match(/<time[^>]*datetime="([^"]+)"/i);
       if (!titleMatch) continue;
-      const raw = titleMatch[1].trim();
+      const raw = titleMatch[2].trim();
       const { title, year, quality, group } = parseReleaseName(raw);
       if (!title || title.length < 3) continue;
       items.push({
@@ -122,6 +130,8 @@ export async function fetchScnsrcScene(): Promise<SceneRelease[]> {
         size: 0,
         imdbId: null,
         source: "scnsrc",
+        url: titleMatch[1] ?? null,
+        releaseName: raw,
       });
       if (items.length >= 15) break;
     }

@@ -16,6 +16,7 @@ export const MOCK_MOVIES: Movie[] = [
     director: { id: 1, name: "Joaquim Dos Santos", photo: null },
     date_added: new Date().toISOString(), sources: ["yts", "srrdb"],
     torrents: [{ quality: "2160p", type: "BluRay", size: "12.5 GB", seeds: 2341 }],
+    releases: [],
   },
   {
     id: 2, imdb_code: "tt15398776",
@@ -29,6 +30,7 @@ export const MOCK_MOVIES: Movie[] = [
     director: { id: 525, name: "Christopher Nolan", photo: null },
     date_added: new Date().toISOString(), sources: ["yts"],
     torrents: [{ quality: "1080p", type: "BluRay", size: "8.2 GB", seeds: 5621 }],
+    releases: [],
   },
   {
     id: 3, imdb_code: "tt21692408",
@@ -42,6 +44,7 @@ export const MOCK_MOVIES: Movie[] = [
     director: { id: 2, name: "Celine Song", photo: null },
     date_added: new Date().toISOString(), sources: ["tmdb", "predb"],
     torrents: [{ quality: "1080p", type: "WEB-DL", size: "5.1 GB", seeds: 892 }],
+    releases: [],
   },
   {
     id: 4, imdb_code: "tt14230388",
@@ -55,6 +58,7 @@ export const MOCK_MOVIES: Movie[] = [
     director: { id: 3, name: "Charlotte Wells", photo: null },
     date_added: new Date().toISOString(), sources: ["tmdb"],
     torrents: [{ quality: "1080p", type: "BluRay", size: "6.3 GB", seeds: 441 }],
+    releases: [],
   },
   {
     id: 5, imdb_code: "tt1517268",
@@ -71,5 +75,6 @@ export const MOCK_MOVIES: Movie[] = [
       { quality: "2160p", type: "BluRay", size: "15 GB", seeds: 4102 },
       { quality: "1080p", type: "BluRay", size: "7.2 GB", seeds: 8934 },
     ],
+    releases: [],
   },
 ];

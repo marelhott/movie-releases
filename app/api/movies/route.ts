@@ -152,6 +152,37 @@ async function fetchOMDB(imdbId: string) {
   } catch { return null; }
 }
 
+function buildReleaseEntries(entry: any, movieTitle: string, movieYear: number) {
+  if (entry._source === "yts") {
+    const slug = `${movieTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${movieYear}`;
+    return (entry._raw?.torrents ?? []).map((torrent: any) => ({
+      source: "yts",
+      label: `${torrent.quality} ${torrent.type}`.trim(),
+      quality: torrent.quality ?? null,
+      date: entry._raw?.date_uploaded ?? null,
+      url: `https://yts.mx/movies/${slug}`,
+      size: torrent.size ?? null,
+      seeds: typeof torrent.seeds === "number" ? torrent.seeds : null,
+      group: null,
+    }));
+  }
+
+  if (["srrdb", "predb", "scnsrc"].includes(entry._source)) {
+    return [{
+      source: entry._source,
+      label: entry._raw?.releaseName ?? entry._raw?.title ?? entry._title,
+      quality: entry._raw?.quality ?? null,
+      date: entry._raw?.date ?? null,
+      url: entry._raw?.url ?? null,
+      size: entry._raw?.size ? String(entry._raw.size) : null,
+      seeds: null,
+      group: entry._raw?.group ?? null,
+    }];
+  }
+
+  return [];
+}
+
 const getCachedTMDBDetail = unstable_cache(
   async (tmdbId: number) => getTMDBDetail(tmdbId),
   ["movie-tmdb-detail-v1"],
@@ -257,6 +288,11 @@ async function normalise(entry: any): Promise<any | null> {
     const sceneSource = ["srrdb", "predb", "scnsrc"].includes(entry._source) ? entry._source : null;
 
     const sourceDate = ytsRaw?.date_uploaded ?? entry._raw?.date ?? entry._raw?.pubDate ?? null;
+    const releases = buildReleaseEntries(
+      entry,
+      ytsRaw?.title ?? tmdb?.original_title ?? entry._raw?.title ?? entry._title,
+      ytsRaw?.year ?? entry._year ?? (tmdb?.release_date ? parseInt(tmdb.release_date) : 0)
+    );
 
     return {
       id: tmdb?.id ?? Math.abs(Math.random() * 1e9 | 0),
@@ -282,6 +318,7 @@ async function normalise(entry: any): Promise<any | null> {
       torrents: ytsRaw?.torrents?.map((t: any) => ({
         quality: t.quality, type: t.type, size: t.size, seeds: t.seeds,
       })) ?? [],
+      releases,
     };
   } catch { return null; }
 }
@@ -302,6 +339,18 @@ function deduplicate(entries: any[]): any[] {
       const ex = byImdb.get(imdbKey)!;
       ex.sources = [...new Set([...ex.sources, ...e.sources])];
       if (e.torrents?.length) ex.torrents = [...ex.torrents, ...e.torrents];
+      if (e.releases?.length) {
+        const seen = new Set((ex.releases ?? []).map((release: any) => `${release.source}:${release.label}:${release.quality ?? ""}`));
+        ex.releases = [
+          ...(ex.releases ?? []),
+          ...e.releases.filter((release: any) => {
+            const key = `${release.source}:${release.label}:${release.quality ?? ""}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }),
+        ];
+      }
       continue;
     }
     if (!imdbKey && byTitleYear.has(tyKey)) continue;
