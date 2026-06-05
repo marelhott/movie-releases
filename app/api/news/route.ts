@@ -428,54 +428,73 @@ const getRawNewsFeed = unstable_cache(
     ).slice(0, RAW_NEWS_LIMIT);
   },
   ["raw-news-feed-v3"],
-  { revalidate: 1800 }
+  { revalidate: 900 }
+);
+
+const getCachedOgImage = unstable_cache(
+  async (link: string) => fetchOGImage(link),
+  ["news-og-image-v1"],
+  { revalidate: 86400 }
+);
+
+const getCachedGeneratedBatch = unstable_cache(
+  async (batchPayload: string) => {
+    const { tmdb, anthropic } = getKeys();
+    const articles = JSON.parse(batchPayload) as RawArticle[];
+
+    if (!(anthropic && tmdb)) {
+      return articles.map((article) => ({
+        title_cs: article.title,
+        body_cs: buildFallbackBody(article),
+        title_en: article.title,
+        link: article.link,
+        pubDate: article.pubDate,
+        source: article.source,
+        focus: article.focus,
+        image: article.image,
+      }));
+    }
+
+    const client = new Anthropic({ apiKey: anthropic });
+    return generateArticleBatch(articles, client, tmdb);
+  },
+  ["news-batch-v1"],
+  { revalidate: 604800 }
 );
 
 const getCachedNewsPage = unstable_cache(
   async (page: number, pageSize: number) => {
-    const { tmdb, anthropic } = getKeys();
     const allArticles = await getRawNewsFeed();
     const start = Math.max(0, (page - 1) * pageSize);
     const pageItems = allArticles.slice(start, start + pageSize).map((article) => ({ ...article }));
     const hasMore = start + pageSize < allArticles.length;
 
-    const missingImages = pageItems.filter((article) => !article.image).slice(0, OG_IMAGE_FALLBACK_LIMIT);
-    const ogImages = await Promise.all(missingImages.map((article) => fetchOGImage(article.link)));
-    missingImages.forEach((article, index) => {
-      if (ogImages[index]) article.image = ogImages[index];
-    });
+    const articlesWithImages = await Promise.all(
+      pageItems.map(async (article, index) => {
+        if (article.image || index >= OG_IMAGE_FALLBACK_LIMIT) return article;
+        const image = await getCachedOgImage(article.link);
+        return image ? { ...article, image } : article;
+      })
+    );
 
-    let articles: NewsArticle[] = pageItems.map((article) => ({
-      title_cs: article.title,
-      body_cs: buildFallbackBody(article),
-      title_en: article.title,
-      link: article.link,
-      pubDate: article.pubDate,
-      source: article.source,
-      focus: article.focus,
-      image: article.image,
-    }));
-
-    if (anthropic && tmdb) {
-      const client = new Anthropic({ apiKey: anthropic });
-      const batches: RawArticle[][] = [];
-      for (let index = 0; index < pageItems.length; index += CLAUDE_BATCH_SIZE) {
-        batches.push(pageItems.slice(index, index + CLAUDE_BATCH_SIZE));
-      }
-      const translated = await Promise.all(batches.map((batch) => generateArticleBatch(batch, client, tmdb)));
-      articles = translated.flat();
+    const batches: RawArticle[][] = [];
+    for (let index = 0; index < articlesWithImages.length; index += CLAUDE_BATCH_SIZE) {
+      batches.push(articlesWithImages.slice(index, index + CLAUDE_BATCH_SIZE));
     }
+    const translated = await Promise.all(
+      batches.map((batch) => getCachedGeneratedBatch(JSON.stringify(batch)))
+    );
 
     return {
-      articles,
+      articles: translated.flat(),
       hasMore,
       page,
       pageSize,
       total: allArticles.length,
     };
   },
-  ["news-page-v4"],
-  { revalidate: 1800 }
+  ["news-page-v5"],
+  { revalidate: 900 }
 );
 
 export async function GET(request: Request) {
