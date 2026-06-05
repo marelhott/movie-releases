@@ -1,15 +1,3 @@
-export interface NewsArticle {
-  title_cs: string;
-  summary_cs: string;
-  title_en: string;
-  link: string;
-  pubDate: string;
-  source: string;
-  focus: string;
-  image?: string;
-}
+import type { NewsArticle, NewsCategory, NewsResponse, PersonSnippet } from "@/lib/newsService";
 
-export interface NewsData {
-  articles: NewsArticle[];
-  trending: NewsArticle[];
-}
+export type { NewsArticle, NewsCategory, NewsResponse, PersonSnippet };

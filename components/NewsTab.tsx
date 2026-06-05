@@ -5,34 +5,7 @@ import { RefreshCw, Loader2, Clapperboard, Film, X, ChevronRight } from "lucide-
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
 import PersonModal from "./PersonModal";
-
-interface PersonPreview {
-  id: number;
-  name: string;
-  photo: string | null;
-  known_for: string;
-  top_films: { title: string; year: number; poster: string | null }[];
-}
-
-interface NewsArticle {
-  title_cs: string;
-  body_cs: string;
-  title_en: string;
-  link: string;
-  pubDate: string;
-  source: string;
-  focus: string;
-  image?: string;
-  person?: PersonPreview;
-}
-
-interface NewsResponse {
-  articles: NewsArticle[];
-  hasMore: boolean;
-  page: number;
-  pageSize: number;
-  total: number;
-}
+import type { NewsArticle, NewsResponse, PersonSnippet as PersonSnippetData } from "@/types/news";
 
 const PAGE_SIZE = 30;
 const SOURCE_FILTERS = [
@@ -89,7 +62,7 @@ function PersonSnippet({
   person,
   onClickPerson,
 }: {
-  person: PersonPreview;
+  person: PersonSnippetData;
   onClickPerson: (id: number) => void;
 }) {
   return (
@@ -219,6 +192,7 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
   const [imgError, setImgError] = useState(false);
   const [personId, setPersonId] = useState<number | null>(null);
   const badge = SOURCE_BADGE[article.source] ?? "bg-[rgba(255,253,248,0.88)] text-[color:var(--foreground)]";
+  const showImage = Boolean(article.image && !imgError && article.image_quality !== "low");
 
   return (
     <>
@@ -227,8 +201,8 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
         onClick={onClick}
         style={{ contentVisibility: "auto", containIntrinsicSize: "320px 420px" }}
       >
-        <div className="relative aspect-video w-full flex-shrink-0 bg-[color:var(--surface-muted)]">
-          {article.image && !imgError ? (
+        {showImage ? (
+          <div className="relative aspect-[16/10] w-full flex-shrink-0 bg-[color:var(--surface-muted)]">
             <img
               src={article.image}
               alt=""
@@ -237,24 +211,30 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
               loading="lazy"
               decoding="async"
             />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-[color:var(--muted)]">
-              <Clapperboard className="h-7 w-7" />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(29,42,36,0.72)] via-[rgba(29,42,36,0.08)] to-transparent" />
-          <span className={`absolute bottom-2 left-2 rounded-full px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${badge}`}>
-            {article.source}
-          </span>
-          {article.pubDate && (
-            <span className="absolute right-2 top-2 rounded bg-white/80 px-1.5 py-0.5 text-xs text-[color:var(--foreground)] backdrop-blur-sm">
-              {timeAgo(article.pubDate)}
+            <div className="absolute inset-0 bg-gradient-to-t from-[rgba(29,42,36,0.55)] via-[rgba(29,42,36,0.06)] to-transparent" />
+            <span className={`absolute bottom-2 left-2 rounded-full px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${badge}`}>
+              {article.source}
             </span>
-          )}
-        </div>
+            {article.pubDate && (
+              <span className="absolute right-2 top-2 rounded bg-white/80 px-1.5 py-0.5 text-xs text-[color:var(--foreground)] backdrop-blur-sm">
+                {timeAgo(article.pubDate)}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between border-b border-[color:var(--line)] px-4 py-3">
+            <span className="text-xs font-medium text-[color:var(--foreground)]">{article.source}</span>
+            {article.pubDate && (
+              <span className="text-xs text-[color:var(--muted)]">{timeAgo(article.pubDate)}</span>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-1 flex-col p-4">
-          <p className="mb-2 text-xs text-[color:var(--muted)]">{article.focus}</p>
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[color:var(--muted)]">
+            <span>{article.category_label}</span>
+            {article.cluster_size > 1 && <span>{article.cluster_size} zdroje</span>}
+          </div>
           <h3 className="mb-2 text-base font-semibold leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)] sm:text-lg">
             {article.title_cs}
           </h3>
@@ -486,7 +466,7 @@ export default function NewsTab() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 9 }).map((_, index) => (
             <div key={index} className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)]">
-              <div className="aspect-video animate-pulse bg-[color:var(--surface-muted)]" />
+              <div className="aspect-[16/10] animate-pulse bg-[color:var(--surface-muted)]" />
               <div className="space-y-3 p-4">
                 <div className="h-3 w-24 animate-pulse rounded bg-[color:var(--surface-muted)]" />
                 <div className="h-6 w-full animate-pulse rounded bg-[color:var(--surface-muted)]" />
