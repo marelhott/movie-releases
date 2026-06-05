@@ -19,6 +19,12 @@ function hasConfiguredKey(value: string | undefined) {
   return Boolean(value && !value.includes("your_") && !value.includes("here"));
 }
 
+function getTimestamp(value: string | null | undefined) {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 // ── Source fetchers ──────────────────────────────────────────────────────────
 
 async function fetchYTS(page = 1) {
@@ -250,6 +256,8 @@ async function normalise(entry: any): Promise<any | null> {
 
     const sceneSource = ["srrdb", "predb", "scnsrc"].includes(entry._source) ? entry._source : null;
 
+    const sourceDate = ytsRaw?.date_uploaded ?? entry._raw?.date ?? entry._raw?.pubDate ?? null;
+
     return {
       id: tmdb?.id ?? Math.abs(Math.random() * 1e9 | 0),
       imdb_code: imdbCode,
@@ -269,7 +277,7 @@ async function normalise(entry: any): Promise<any | null> {
       },
       cast,
       director,
-      date_added: ytsRaw?.date_uploaded ?? tmdb?.release_date ?? new Date().toISOString(),
+      date_added: sourceDate ?? tmdb?.release_date ?? new Date().toISOString(),
       sources: entry._sources ?? [entry._source, ...(sceneSource ? [sceneSource] : [])],
       torrents: ytsRaw?.torrents?.map((t: any) => ({
         quality: t.quality, type: t.type, size: t.size, seeds: t.seeds,
@@ -372,12 +380,19 @@ const getCachedMoviesPage = unstable_cache(
     }
 
     const movies = deduplicate(normalised)
+      .sort((left, right) => {
+        const byDate = getTimestamp(right.date_added) - getTimestamp(left.date_added);
+        if (byDate !== 0) return byDate;
+        const byYear = Number(right.year ?? 0) - Number(left.year ?? 0);
+        if (byYear !== 0) return byYear;
+        return String(left.title ?? "").localeCompare(String(right.title ?? ""));
+      })
       .filter(m => m.poster)
       .slice(0, MOVIES_PAGE_LIMIT);
 
     return { movies, page };
   },
-  ["movies-page-v3"],
+  ["movies-page-v4"],
   { revalidate: 1800 }
 );
 

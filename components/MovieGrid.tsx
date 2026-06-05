@@ -10,13 +10,17 @@ type MovieCache = {
   page: number;
   hasMore: boolean;
   hydrated: boolean;
+  fetchedAt: number;
 };
+
+const CACHE_TTL_MS = 15 * 60 * 1000;
 
 const movieCache: MovieCache = {
   movies: [],
   page: 1,
   hasMore: true,
   hydrated: false,
+  fetchedAt: 0,
 };
 
 export default function MovieGrid() {
@@ -48,6 +52,7 @@ export default function MovieGrid() {
         movieCache.hasMore = true;
       }
       movieCache.hydrated = true;
+      movieCache.fetchedAt = Date.now();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Neznámá chyba");
     } finally {
@@ -60,6 +65,35 @@ export default function MovieGrid() {
     void loadMovies(1, "replace");
   }, [loadMovies]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!movieCache.hydrated) return;
+      if (Date.now() - movieCache.fetchedAt < CACHE_TTL_MS) return;
+      if (movieCache.page !== 1) return;
+      void loadMovies(1, "replace");
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, [loadMovies]);
+
+  useEffect(() => {
+    if (!movieCache.hydrated) return;
+    if (Date.now() - movieCache.fetchedAt < CACHE_TTL_MS) return;
+    if (movieCache.page !== 1) return;
+    void loadMovies(1, "replace");
+  }, [loadMovies]);
+
+  const refresh = useEffectEvent(async () => {
+    movieCache.hydrated = false;
+    movieCache.page = 1;
+    movieCache.hasMore = true;
+    movieCache.movies = [];
+    movieCache.fetchedAt = 0;
+    setPage(1);
+    setHasMore(true);
+    void loadMovies(1, "replace");
+  });
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between gap-4">
@@ -68,6 +102,13 @@ export default function MovieGrid() {
           Nové filmy
           {movies.length > 0 && <span className="text-sm font-normal text-[color:var(--muted)]">{movies.length} titulů</span>}
         </h2>
+        <button
+          onClick={() => void refresh()}
+          disabled={loading}
+          className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+        >
+          Aktualizovat
+        </button>
       </div>
 
       {error && <div className="text-center py-12 text-red-400">{error}</div>}
