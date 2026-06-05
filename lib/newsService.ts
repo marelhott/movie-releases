@@ -837,11 +837,7 @@ async function buildNewsPage(page: number, pageSize: number, forceRefresh: boole
   }
 
   const translated = await Promise.all(
-    batches.map((batch) =>
-      forceRefresh
-        ? generateClusterBatch(batch)
-        : getCachedClusterBatch(JSON.stringify(batch))
-    )
+    batches.map((batch) => getCachedClusterBatch(JSON.stringify(batch)))
   );
 
   return {
