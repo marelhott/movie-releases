@@ -11,6 +11,16 @@ export interface SceneRelease {
   releaseName?: string | null;
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 function parseReleaseName(name: string) {
   const yearMatch = name.match(/\b(19|20)\d{2}\b/);
   const year = yearMatch ? parseInt(yearMatch[0]) : 0;
@@ -43,7 +53,7 @@ export async function fetchSrrdb(): Promise<SceneRelease[]> {
       const dateMatch = block.match(/<pubDate>([^<]+)<\/pubDate>/);
       const linkMatch = block.match(/<link>([^<]+)<\/link>/);
       if (!titleMatch) continue;
-      const raw = titleMatch[1].trim();
+      const raw = decodeHtmlEntities(titleMatch[1].trim());
       // Skip non-movie categories (TV, music, etc.)
       if (/S\d{2}E\d{2}|\.EP\.|SEASON|DISC\d/i.test(raw)) continue;
       // Only video releases
@@ -84,7 +94,7 @@ export async function fetchPredb(): Promise<SceneRelease[]> {
       const dateMatch = block.match(/<pubDate>([^<]+)<\/pubDate>/);
       const linkMatch = block.match(/<link>([^<]+)<\/link>/);
       if (!titleMatch) continue;
-      const raw = titleMatch[1].trim();
+      const raw = decodeHtmlEntities(titleMatch[1].trim());
       const { title, year, quality, group } = parseReleaseName(raw);
       if (!title || title.length < 3) continue;
       items.push({
@@ -121,7 +131,7 @@ export async function fetchScnsrcScene(): Promise<SceneRelease[]> {
       const titleMatch = block.match(/<h\d[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/i);
       const dateMatch = block.match(/<time[^>]*datetime="([^"]+)"/i);
       if (!titleMatch) continue;
-      const raw = titleMatch[2].trim();
+      const raw = decodeHtmlEntities(titleMatch[2].trim());
       const { title, year, quality, group } = parseReleaseName(raw);
       if (!title || title.length < 3) continue;
       items.push({
