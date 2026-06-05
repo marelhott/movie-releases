@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Movie Releases",
-  description: "Filmove novinky, trending tituly a nove releasy na jednom miste.",
+  description: "Filmové novinky, trending tituly a nové releasy na jednom místě.",
 };
 
 export default function RootLayout({
