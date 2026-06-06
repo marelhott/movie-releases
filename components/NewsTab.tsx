@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { RefreshCw, Loader2, Clapperboard, X, ChevronRight } from "lucide-react";
+import { RefreshCw, Loader2, Clapperboard, Film, X, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
 import PersonModal from "./PersonModal";
