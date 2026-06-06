@@ -206,8 +206,8 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
         onClick={onClick}
         style={{ contentVisibility: "auto", containIntrinsicSize: "300px 340px" }}
       >
-        {/* Image — 3:2 ratio */}
-        <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "3/2" }}>
+        {/* Image — 16:9 ratio (menší) */}
+        <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "16/9" }}>
           {hasImage ? (
             <img
               src={article.image}
@@ -228,11 +228,14 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
         {/* Text area */}
         <div className="flex flex-1 flex-col gap-2 px-4 py-3">
           <h3
-            className="line-clamp-3 flex-1 text-[0.9375rem] font-medium leading-[1.4] text-[color:var(--foreground)] transition-colors duration-150 group-hover:text-[color:var(--accent)]"
+            className="line-clamp-2 text-[0.9rem] font-medium leading-[1.35] text-[color:var(--foreground)] transition-colors duration-150 group-hover:text-[color:var(--accent)]"
             style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
           >
             {article.title_cs}
           </h3>
+          <p className="line-clamp-3 flex-1 text-[0.8125rem] leading-[1.5] text-[color:var(--muted)]">
+            {article.body_cs}
+          </p>
 
           {/* Bottom meta row */}
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--muted)]">
@@ -478,7 +481,7 @@ export default function NewsTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredArticles.map((article) => (
           <NewsCard key={article.link} article={article} onClick={() => setSelected(article)} />
         ))}
