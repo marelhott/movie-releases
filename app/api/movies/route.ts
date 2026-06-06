@@ -395,7 +395,7 @@ const getCachedMoviesPage = unstable_cache(
   async (page: number) => {
     return buildMoviesPage(page, false);
   },
-  ["movies-page-v4"],
+  ["movies-page-v5"],
   { revalidate: 1800 }
 );
 
