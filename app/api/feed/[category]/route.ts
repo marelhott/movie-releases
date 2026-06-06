@@ -111,6 +111,47 @@ async function fetchRss(source: { name: string; url: string; siteUrl: string }, 
   }
 }
 
+// ── OG image enrichment ───────────────────────────────────────────────────────
+
+async function fetchOgImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
+      signal: AbortSignal.timeout(4000),
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    // og:image
+    const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    if (og?.[1]) return og[1];
+    // twitter:image
+    const tw = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    if (tw?.[1]) return tw[1];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function enrichImages(articles: any[]): Promise<any[]> {
+  const missing = articles.filter(a => !a.image);
+  // Enrich up to 20 articles without images, in parallel
+  const enriched = await Promise.all(
+    missing.slice(0, 20).map(async a => ({
+      url: a.url,
+      image: await fetchOgImage(a.url),
+    }))
+  );
+  const imageMap = new Map(enriched.map(e => [e.url, e.image]));
+  return articles.map(a => ({
+    ...a,
+    image: a.image ?? imageMap.get(a.url) ?? null,
+  }));
+}
+
 // ── Translation ───────────────────────────────────────────────────────────────
 
 async function translateBatch(articles: any[]): Promise<any[]> {
@@ -172,7 +213,8 @@ async function buildFeed(category: "ai" | "tech", fresh = false) {
     .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
     .slice(0, 40);
 
-  const translated = await translateBatch(sorted);
+  const withImages = await enrichImages(sorted);
+  const translated = await translateBatch(withImages);
   return translated;
 }
 
