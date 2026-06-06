@@ -72,11 +72,11 @@ function extractImage(item: any): string | null {
   return null;
 }
 
-async function fetchRss(source: { name: string; url: string; siteUrl: string }, limit = 8) {
+async function fetchRss(source: { name: string; url: string; siteUrl: string }, limit = 8, fresh = false) {
   try {
     const res = await fetch(source.url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
-      next: { revalidate: 1800 },
+      ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: 1800 } }),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];
@@ -153,10 +153,10 @@ ${JSON.stringify(toTranslate.map(a => ({ title: a.title, summary: a.summary })))
 
 // ── Build feed ────────────────────────────────────────────────────────────────
 
-async function buildFeed(category: "ai" | "tech") {
+async function buildFeed(category: "ai" | "tech", fresh = false) {
   const sources = category === "ai" ? AI_SOURCES : TECH_SOURCES;
 
-  const rawBatches = await Promise.all(sources.map(s => fetchRss(s, 6)));
+  const rawBatches = await Promise.all(sources.map(s => fetchRss(s, 6, fresh)));
   const allRaw = rawBatches.flat();
 
   // Deduplicate by URL
@@ -195,7 +195,7 @@ export async function GET(
 
   const forceRefresh = new URL(request.url).searchParams.has("refresh");
   const articles = forceRefresh
-    ? await buildFeed(category)
+    ? await buildFeed(category, true)
     : await getCachedFeed(category);
 
   return NextResponse.json({ articles }, {

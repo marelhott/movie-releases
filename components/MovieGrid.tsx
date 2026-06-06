@@ -13,8 +13,8 @@ type MovieCache = {
   fetchedAt: number;
 };
 
-const CACHE_TTL_MS = 15 * 60 * 1000;
-const STORAGE_KEY = "movie-releases:movies-cache:v1";
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const STORAGE_KEY = "movie-releases:movies-cache:v2";
 
 const movieCache: MovieCache = {
   movies: [],
@@ -107,18 +107,21 @@ export default function MovieGrid() {
     const interval = window.setInterval(() => {
       if (!movieCache.hydrated) return;
       if (Date.now() - movieCache.fetchedAt < CACHE_TTL_MS) return;
-      if (movieCache.page !== 1) return;
       void loadMovies(1, "replace");
     }, 60_000);
 
-    return () => window.clearInterval(interval);
-  }, [loadMovies]);
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!movieCache.hydrated) return;
+      if (Date.now() - movieCache.fetchedAt < CACHE_TTL_MS) return;
+      void loadMovies(1, "replace", { forceRefresh: true });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
-  useEffect(() => {
-    if (!movieCache.hydrated) return;
-    if (Date.now() - movieCache.fetchedAt < CACHE_TTL_MS) return;
-    if (movieCache.page !== 1) return;
-    void loadMovies(1, "replace");
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [loadMovies]);
 
   const refresh = useEffectEvent(async () => {

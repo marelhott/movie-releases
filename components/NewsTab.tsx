@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { RefreshCw, Loader2, Clapperboard, Film, X, ChevronRight } from "lucide-react";
+import { RefreshCw, Loader2, Film, X, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
 import PersonModal from "./PersonModal";
@@ -27,7 +27,7 @@ type NewsCache = {
   fetchedAt: number;
 };
 
-const CACHE_TTL_MS = 15 * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 const STORAGE_KEY = "movie-releases:news-cache:v1";
 
 const newsCache: NewsCache = {
@@ -387,10 +387,24 @@ export default function NewsTab() {
   }, [loadPage]);
 
   useEffect(() => {
-    if (!newsCache.hydrated) return;
-    if (Date.now() - newsCache.fetchedAt < CACHE_TTL_MS) return;
-    if (newsCache.page !== 1) return;
-    void loadPage(1, "replace");
+    const interval = window.setInterval(() => {
+      if (!newsCache.hydrated) return;
+      if (Date.now() - newsCache.fetchedAt < CACHE_TTL_MS) return;
+      void loadPage(1, "replace", { forceRefresh: true });
+    }, 60_000);
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!newsCache.hydrated) return;
+      if (Date.now() - newsCache.fetchedAt < CACHE_TTL_MS) return;
+      void loadPage(1, "replace", { forceRefresh: true });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [loadPage]);
 
   const refresh = useEffectEvent(async () => {
@@ -434,12 +448,14 @@ export default function NewsTab() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-[color:var(--foreground)]">
-          <Clapperboard className="h-5 w-5 text-[color:var(--accent)]" />
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <h2
+          className="text-[1.1rem] font-semibold text-[color:var(--foreground)]"
+          style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+        >
           Filmové novinky
           {articles.length > 0 && (
-            <span className="text-sm font-normal text-[color:var(--muted)]">{filteredArticles.length} zpráv</span>
+            <span className="ml-2 text-[0.85rem] font-normal text-[color:var(--muted)]">{filteredArticles.length} zpráv</span>
           )}
         </h2>
 

@@ -25,7 +25,7 @@ type FeedCache = {
   fetchedAt: number;
 };
 
-const CACHE_TTL_MS = 15 * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 function makeCache(): FeedCache {
   return { articles: [], hydrated: false, fetchedAt: 0 };
@@ -153,6 +153,23 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
 
     if (cache.hydrated && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return;
     void load();
+
+    const interval = window.setInterval(() => {
+      if (Date.now() - cache.fetchedAt < CACHE_TTL_MS) return;
+      void load(true);
+    }, 60_000);
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - cache.fetchedAt < CACHE_TTL_MS) return;
+      void load(true);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [load, category]);
 
   const refresh = useEffectEvent(() => {

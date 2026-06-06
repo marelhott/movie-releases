@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Film } from "lucide-react";
 import TabNav, { Tab } from "./TabNav";
 import MovieGrid from "./MovieGrid";
 import NewsTab from "./NewsTab";
 import FeedTab from "./FeedTab";
 
 export default function AppShell() {
-  const [tab, setTab] = useState<Tab>("news");
+  const [tab, setTab] = useState<Tab>("ai");
   const [visited, setVisited] = useState<Record<Tab, boolean>>({
-    news: true, releases: false, ai: false, tech: false,
+    ai: true, tech: false, news: false, releases: false,
   });
 
   useEffect(() => {
@@ -27,11 +26,13 @@ export default function AppShell() {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[color:var(--line)] bg-[color:var(--background)]/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-screen-2xl flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-          <div className="flex items-center gap-3">
-            <Film className="h-5 w-5 text-[color:var(--foreground)]" />
-            <span className="text-sm font-semibold tracking-[-0.02em] text-[color:var(--foreground)] sm:text-base">Movie Releases</span>
-          </div>
+        <div className="mx-auto flex max-w-screen-2xl items-center gap-6 px-4 sm:px-6">
+          <span
+            className="flex-shrink-0 text-[0.9375rem] font-semibold tracking-[-0.02em] text-[color:var(--foreground)]"
+            style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+          >
+            Release
+          </span>
           <TabNav active={tab} onChange={setTab} />
         </div>
       </header>

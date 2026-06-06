@@ -27,11 +27,11 @@ function getTimestamp(value: string | null | undefined) {
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
 
-async function fetchYTS(page = 1) {
+async function fetchYTS(page = 1, fresh = false) {
   try {
     const res = await fetch(
       `https://yts.mx/api/v2/list_movies.json?sort_by=date_added&limit=50&page=${page}`,
-      { next: { revalidate: 1800 } }
+      fresh ? { cache: "no-store" } : { next: { revalidate: 1800 } }
     );
     const data = await res.json();
     return (data.data?.movies ?? []).map((m: any) => ({
@@ -40,12 +40,12 @@ async function fetchYTS(page = 1) {
   } catch { return []; }
 }
 
-async function fetchTMDBSection(endpoint: string) {
+async function fetchTMDBSection(endpoint: string, fresh = false) {
   if (!hasConfiguredKey(getKeys().tmdb)) return [];
   try {
     const pages = await Promise.all([1, 2].map(p =>
       fetch(`https://api.themoviedb.org/3/${endpoint}?api_key=${getKeys().tmdb}&language=cs&region=CZ&page=${p}`,
-        { next: { revalidate: 3600 } }).then(r => r.json())
+        fresh ? { cache: "no-store" } : { next: { revalidate: 3600 } }).then(r => r.json())
     ));
     return pages.flatMap((d: any) => d.results ?? []).map((m: any) => ({
       _source: "tmdb", _imdb: null, _tmdb_id: m.id,
@@ -402,9 +402,9 @@ const getCachedMoviesPage = unstable_cache(
 async function buildMoviesPage(page: number, forceFresh: boolean) {
     const [yts, nowPlaying, upcoming, srrdb, predb, scnsrc] =
       await Promise.all([
-        fetchYTS(page),
-        page === 1 ? fetchTMDBSection("movie/now_playing") : Promise.resolve([]),
-        page === 1 ? fetchTMDBSection("movie/upcoming") : Promise.resolve([]),
+        fetchYTS(page, forceFresh),
+        page === 1 ? fetchTMDBSection("movie/now_playing", forceFresh) : Promise.resolve([]),
+        page === 1 ? fetchTMDBSection("movie/upcoming", forceFresh) : Promise.resolve([]),
         page === 1 ? fetchSrrdb() : Promise.resolve([]),
         page === 1 ? fetchPredb() : Promise.resolve([]),
         page === 1 ? fetchScnsrcScene() : Promise.resolve([]),
