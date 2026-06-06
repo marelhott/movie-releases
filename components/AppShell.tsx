@@ -23,7 +23,7 @@ export default function AppShell() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-[color:var(--line)] bg-white/96 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-[color:var(--line)] bg-[color:var(--background)]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-screen-2xl flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
           <div className="flex items-center gap-3">
             <Film className="h-5 w-5 text-[color:var(--foreground)]" />

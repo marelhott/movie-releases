@@ -202,62 +202,67 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
   return (
     <>
       <article
-        className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl bg-[color:var(--surface)] transition-all duration-150 hover:shadow-[0_4px_24px_rgba(39,26,0,0.10)]"
         onClick={onClick}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "320px 380px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "300px 340px" }}
       >
-        {hasImage && (
-          <div className="relative aspect-[16/9] w-full flex-shrink-0 overflow-hidden bg-[color:var(--surface-muted)]">
+        {/* Image — 3:2 ratio */}
+        <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "3/2" }}>
+          {hasImage ? (
             <img
               src={article.image}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              className="h-full w-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-[1.04]"
               onError={() => setImgError(true)}
               loading="lazy"
               decoding="async"
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
-            <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
-              <SourcePill article={article} />
-              {article.pubDate && (
-                <span className="rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white/90 backdrop-blur-sm">
-                  {timeAgo(article.pubDate)}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-1 flex-col p-3.5">
-          {!hasImage && (
-            <div className="mb-2 flex items-center justify-between text-[11px] text-[color:var(--muted)]">
-              <span className="font-semibold text-[color:var(--foreground)]">{article.source}</span>
-              {article.pubDate && <span>{timeAgo(article.pubDate)}</span>}
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <span className="text-xs text-[color:var(--faint)]">{article.source}</span>
             </div>
           )}
-          <div className="mb-1.5 text-[11px] text-[color:var(--muted)]">
-            {article.category_label}{article.cluster_size > 1 ? ` · ${article.cluster_size}×` : ""}
-          </div>
-          <h3 className="flex-1 text-[0.9rem] font-semibold leading-snug tracking-[-0.01em] text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
+        </div>
+
+        {/* Text area */}
+        <div className="flex flex-1 flex-col gap-2 px-4 py-3">
+          <h3
+            className="line-clamp-3 flex-1 text-[0.9375rem] font-medium leading-[1.4] text-[color:var(--foreground)] transition-colors duration-150 group-hover:text-[color:var(--accent)]"
+            style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+          >
             {article.title_cs}
           </h3>
 
-          {article.person && (
-            <button
-              className="mt-3 flex items-center gap-2 border-t border-[color:var(--line)] pt-2.5 text-left"
-              onClick={(e) => { e.stopPropagation(); setPersonId(article.person!.id); }}
-            >
-              {article.person.photo && (
-                <img src={article.person.photo} alt={article.person.name}
-                  className="h-7 w-7 flex-shrink-0 rounded-full object-cover"
-                  loading="lazy" decoding="async" />
-              )}
-              <span className="text-xs text-[color:var(--muted)] transition-colors hover:text-[color:var(--accent)]">
-                {article.person.name}
-              </span>
-              <ChevronRight className="ml-auto h-3 w-3 flex-shrink-0 text-[color:var(--muted)]" />
-            </button>
-          )}
+          {/* Bottom meta row */}
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--muted)]">
+            <span className="truncate">{article.source}</span>
+            {article.cluster_size > 1 && (
+              <>
+                <span className="opacity-40">·</span>
+                <span className="flex-shrink-0">{article.cluster_size} zdrojů</span>
+              </>
+            )}
+            {article.pubDate && (
+              <>
+                <span className="opacity-40">·</span>
+                <span className="flex-shrink-0 tabular-nums">{timeAgo(article.pubDate)}</span>
+              </>
+            )}
+            {article.person && (
+              <button
+                className="ml-auto flex flex-shrink-0 items-center gap-1 transition-colors hover:text-[color:var(--foreground)]"
+                onClick={(e) => { e.stopPropagation(); setPersonId(article.person!.id); }}
+              >
+                {article.person.photo && (
+                  <img src={article.person.photo} alt={article.person.name}
+                    className="h-4 w-4 rounded-full object-cover"
+                    loading="lazy" decoding="async" />
+                )}
+                <span className="max-w-[80px] truncate">{article.person.name}</span>
+              </button>
+            )}
+          </div>
         </div>
       </article>
 
@@ -473,7 +478,7 @@ export default function NewsTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {filteredArticles.map((article) => (
           <NewsCard key={article.link} article={article} onClick={() => setSelected(article)} />
         ))}

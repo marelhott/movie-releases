@@ -1,33 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #1d2a24;
-  --surface: #ffffff;
-  --surface-muted: #f4f7f6;
-  --line: #d9e3df;
+  /* Perplexity-inspired design tokens */
+  --background: #fcfcf9;
+  --surface: #fdfbfa;
+  --surface-muted: rgba(39, 26, 0, 0.035);
+  --foreground: rgb(39, 37, 30);
+  --muted: rgba(39, 37, 30, 0.65);
+  --faint: rgba(39, 37, 30, 0.5);
+  --line: rgba(39, 26, 0, 0.09);
   --accent: #0f9f76;
   --accent-soft: #e4f7f0;
-  --muted: #6a746f;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: ui-monospace, monospace;
 }
 
 html {
   -webkit-text-size-adjust: 100%;
-  background: #ffffff;
+  background: var(--background);
   color-scheme: light;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
