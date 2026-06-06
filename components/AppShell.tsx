@@ -5,10 +5,13 @@ import { Film } from "lucide-react";
 import TabNav, { Tab } from "./TabNav";
 import MovieGrid from "./MovieGrid";
 import NewsTab from "./NewsTab";
+import FeedTab from "./FeedTab";
 
 export default function AppShell() {
   const [tab, setTab] = useState<Tab>("news");
-  const [visited, setVisited] = useState<Record<Tab, boolean>>({ news: true, releases: false });
+  const [visited, setVisited] = useState<Record<Tab, boolean>>({
+    news: true, releases: false, ai: false, tech: false,
+  });
 
   useEffect(() => {
     setVisited((current) => (current[tab] ? current : { ...current, [tab]: true }));
@@ -40,6 +43,16 @@ export default function AppShell() {
         {visited.releases && (
           <section className={tab === "releases" ? "block" : "hidden"}>
             <MovieGrid />
+          </section>
+        )}
+        {visited.ai && (
+          <section className={tab === "ai" ? "block" : "hidden"}>
+            <FeedTab category="ai" />
+          </section>
+        )}
+        {visited.tech && (
+          <section className={tab === "tech" ? "block" : "hidden"}>
+            <FeedTab category="tech" />
           </section>
         )}
       </div>
