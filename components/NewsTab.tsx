@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { RefreshCw, Loader2, Clapperboard, Film, X, ChevronRight } from "lucide-react";
+import { RefreshCw, Loader2, Clapperboard, X, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
 import PersonModal from "./PersonModal";
@@ -193,225 +193,70 @@ function SourcePill({ article }: { article: NewsArticle }) {
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${badge}`}>{article.source}</span>;
 }
 
-function NewsHeroCard({ article, onClick }: { article: NewsArticle; onClick: () => void }) {
-  const [personId, setPersonId] = useState<number | null>(null);
-
-  return (
-    <>
-      <article
-        className="group relative cursor-pointer overflow-hidden rounded-[2rem] border border-[color:var(--line)] bg-[color:var(--foreground)] text-white shadow-[0_22px_70px_rgba(17,26,22,0.14)]"
-        onClick={onClick}
-      >
-        {article.image ? (
-          <>
-            <img
-              src={article.image}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover opacity-88 transition-transform duration-500 group-hover:scale-[1.03]"
-              loading="lazy"
-              decoding="async"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(17,26,22,0.14)_0%,rgba(17,26,22,0.22)_34%,rgba(17,26,22,0.92)_100%)]" />
-          </>
-        ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(15,159,118,0.42),transparent_42%),linear-gradient(180deg,#203029_0%,#111a16_100%)]" />
-        )}
-
-        <div className="relative flex min-h-[29rem] flex-col justify-end p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-white/84">
-            <SourcePill article={article} />
-            <span>{article.category_label}</span>
-            {article.cluster_size > 1 && <span>{article.cluster_size} zdroje</span>}
-            {article.pubDate && <span className="sm:ml-auto">{timeAgo(article.pubDate)}</span>}
-          </div>
-
-          <h3 className="max-w-2xl text-3xl font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:text-[2.35rem]">
-            {article.title_cs}
-          </h3>
-          <p className="mt-4 max-w-xl text-sm leading-7 text-white/82 sm:text-[0.98rem]">
-            {article.body_cs}
-          </p>
-
-          {article.person && (
-            <button
-              onClick={(event) => {
-                event.stopPropagation();
-                setPersonId(article.person!.id);
-              }}
-              className="mt-5 inline-flex w-fit items-center gap-2 rounded-full border border-white/18 bg-white/8 px-3 py-2 text-xs text-white/92 backdrop-blur"
-            >
-              {article.person.photo && (
-                <img
-                  src={article.person.photo}
-                  alt={article.person.name}
-                  className="h-7 w-7 rounded-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                />
-              )}
-              <span>{article.person.name}</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </article>
-
-      {personId && <PersonModal personId={personId} onClose={() => setPersonId(null)} />}
-    </>
-  );
-}
-
-function NewsHighlightCard({ article, onClick }: { article: NewsArticle; onClick: () => void }) {
-  const [personId, setPersonId] = useState<number | null>(null);
-
-  return (
-    <>
-      <article
-        className="group flex cursor-pointer flex-col overflow-hidden rounded-[1.6rem] border border-[color:var(--line)] bg-white shadow-sm transition-transform duration-300 hover:-translate-y-0.5"
-        onClick={onClick}
-      >
-        {article.image && (
-          <div className="aspect-[16/10] overflow-hidden bg-[color:var(--surface-muted)]">
-            <img
-              src={article.image}
-              alt=""
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        )}
-        <div className="flex flex-1 flex-col p-4">
-          <div className="mb-2 flex items-center gap-2 text-[11px] text-[color:var(--muted)]">
-            <span className="font-medium text-[color:var(--foreground)]">{article.source}</span>
-            <span>{article.category_label}</span>
-          </div>
-          <h3 className="text-xl font-semibold leading-[1.1] tracking-[-0.03em] text-[color:var(--foreground)]">
-            {article.title_cs}
-          </h3>
-          <p className="mt-3 line-clamp-4 text-sm leading-6 text-[color:var(--muted)]">{article.body_cs}</p>
-          {article.person && (
-            <button
-              onClick={(event) => {
-                event.stopPropagation();
-                setPersonId(article.person!.id);
-              }}
-              className="mt-4 inline-flex items-center gap-2 text-xs text-[color:var(--muted)]"
-            >
-              {article.person.photo && (
-                <img
-                  src={article.person.photo}
-                  alt={article.person.name}
-                  className="h-7 w-7 rounded-full object-cover"
-                  loading="lazy"
-                  decoding="async"
-                />
-              )}
-              <span>{article.person.name}</span>
-            </button>
-          )}
-        </div>
-      </article>
-
-      {personId && <PersonModal personId={personId} onClose={() => setPersonId(null)} />}
-    </>
-  );
-}
 
 function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => void }) {
   const [imgError, setImgError] = useState(false);
   const [personId, setPersonId] = useState<number | null>(null);
-  const showHeroImage = Boolean(article.image && !imgError && article.image_quality !== "low");
-  const showThumbImage = Boolean(article.image && !imgError && article.image_quality === "low");
+  const hasImage = Boolean(article.image && !imgError);
 
   return (
     <>
       <article
-        className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-sm transition-colors hover:bg-[color:var(--surface-muted)]"
+        className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
         onClick={onClick}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "320px 420px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "320px 380px" }}
       >
-        {showHeroImage ? (
-          <div className="relative aspect-[16/10] w-full flex-shrink-0 bg-[color:var(--surface-muted)]">
+        {hasImage && (
+          <div className="relative aspect-[16/9] w-full flex-shrink-0 overflow-hidden bg-[color:var(--surface-muted)]">
             <img
               src={article.image}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
               onError={() => setImgError(true)}
               loading="lazy"
               decoding="async"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[rgba(29,42,36,0.55)] via-[rgba(29,42,36,0.06)] to-transparent" />
-            <div className="absolute bottom-2 left-2">
+            <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
               <SourcePill article={article} />
+              {article.pubDate && (
+                <span className="rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white/90 backdrop-blur-sm">
+                  {timeAgo(article.pubDate)}
+                </span>
+              )}
             </div>
-            {article.pubDate && (
-              <span className="absolute right-2 top-2 rounded bg-white/80 px-1.5 py-0.5 text-xs text-[color:var(--foreground)] backdrop-blur-sm">
-                {timeAgo(article.pubDate)}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between border-b border-[color:var(--line)] px-4 py-3">
-            <span className="text-xs font-medium text-[color:var(--foreground)]">{article.source}</span>
-            {article.pubDate && (
-              <span className="text-xs text-[color:var(--muted)]">{timeAgo(article.pubDate)}</span>
-            )}
           </div>
         )}
 
-        <div className="flex flex-1 flex-col p-4">
-          <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[color:var(--muted)]">
-            <span>{article.category_label}</span>
-            {article.cluster_size > 1 && <span>{article.cluster_size} zdroje</span>}
-          </div>
-          {showThumbImage ? (
-            <div className="mb-3 flex gap-3">
-              <div className="h-20 w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-[color:var(--surface-muted)]">
-                <img
-                  src={article.image}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  onError={() => setImgError(true)}
-                  loading="lazy"
-                  decoding="async"
-                />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-base font-semibold leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)] sm:text-lg">
-                  {article.title_cs}
-                </h3>
-              </div>
+        <div className="flex flex-1 flex-col p-3.5">
+          {!hasImage && (
+            <div className="mb-2 flex items-center justify-between text-[11px] text-[color:var(--muted)]">
+              <span className="font-semibold text-[color:var(--foreground)]">{article.source}</span>
+              {article.pubDate && <span>{timeAgo(article.pubDate)}</span>}
             </div>
-          ) : (
-            <h3 className="mb-2 text-base font-semibold leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)] sm:text-lg">
-              {article.title_cs}
-            </h3>
           )}
-          <p className="line-clamp-4 flex-1 text-sm leading-relaxed text-[color:var(--muted)]">{article.body_cs}</p>
+          <div className="mb-1.5 text-[11px] text-[color:var(--muted)]">
+            {article.category_label}{article.cluster_size > 1 ? ` · ${article.cluster_size}×` : ""}
+          </div>
+          <h3 className="flex-1 text-[0.9rem] font-semibold leading-snug tracking-[-0.01em] text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]">
+            {article.title_cs}
+          </h3>
 
           {article.person && (
-            <div
-              className="mt-3 flex items-center gap-2 border-t border-[color:var(--line)] pt-3"
-              onClick={(event) => {
-                event.stopPropagation();
-                setPersonId(article.person!.id);
-              }}
+            <button
+              className="mt-3 flex items-center gap-2 border-t border-[color:var(--line)] pt-2.5 text-left"
+              onClick={(e) => { e.stopPropagation(); setPersonId(article.person!.id); }}
             >
               {article.person.photo && (
-                <img
-                  src={article.person.photo}
-                  alt={article.person.name}
-                  className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-[color:var(--line)]"
-                  loading="lazy"
-                  decoding="async"
-                />
+                <img src={article.person.photo} alt={article.person.name}
+                  className="h-7 w-7 flex-shrink-0 rounded-full object-cover"
+                  loading="lazy" decoding="async" />
               )}
               <span className="text-xs text-[color:var(--muted)] transition-colors hover:text-[color:var(--accent)]">
                 {article.person.name}
               </span>
-              <ChevronRight className="ml-auto h-3 w-3 text-[color:var(--muted)]" />
-            </div>
+              <ChevronRight className="ml-auto h-3 w-3 flex-shrink-0 text-[color:var(--muted)]" />
+            </button>
           )}
         </div>
       </article>
@@ -568,8 +413,6 @@ export default function NewsTab() {
   }, [loadNextPage]);
 
   const filteredArticles = articles.filter((article) => filter === "vse" || article.source === filter);
-  const featuredArticles = filter === "vse" ? filteredArticles.slice(0, 5) : [];
-  const streamArticles = filter === "vse" ? filteredArticles.slice(5) : filteredArticles;
 
   return (
     <div>
@@ -630,19 +473,8 @@ export default function NewsTab() {
         </div>
       )}
 
-      {featuredArticles.length > 0 && (
-        <section className="mb-8 grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <NewsHeroCard article={featuredArticles[0]} onClick={() => setSelected(featuredArticles[0])} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            {featuredArticles.slice(1).map((article) => (
-              <NewsHighlightCard key={article.link} article={article} onClick={() => setSelected(article)} />
-            ))}
-          </div>
-        </section>
-      )}
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {streamArticles.map((article) => (
+        {filteredArticles.map((article) => (
           <NewsCard key={article.link} article={article} onClick={() => setSelected(article)} />
         ))}
       </div>
