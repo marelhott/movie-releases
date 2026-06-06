@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, X, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -16,73 +16,211 @@ type FeedArticle = {
   url: string;
   image: string | null;
   source: string;
+  sourceWeight: number;
   publishedAt: string;
+  clusterSize: number;
+  score: number;
 };
 
-type FeedCache = {
-  articles: FeedArticle[];
-  hydrated: boolean;
-  fetchedAt: number;
-};
-
+type FeedCache = { articles: FeedArticle[]; hydrated: boolean; fetchedAt: number };
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-function makeCache(): FeedCache {
-  return { articles: [], hydrated: false, fetchedAt: 0 };
-}
-
-const caches: Record<FeedCategory, FeedCache> = {
-  ai: makeCache(),
-  tech: makeCache(),
-};
-
-function storageKey(category: FeedCategory) {
-  return `movie-releases:feed-${category}:v1`;
-}
+function makeCache(): FeedCache { return { articles: [], hydrated: false, fetchedAt: 0 }; }
+const caches: Record<FeedCategory, FeedCache> = { ai: makeCache(), tech: makeCache() };
+function storageKey(c: FeedCategory) { return `movie-releases:feed-${c}:v2`; }
 
 function timeAgo(value: string) {
-  try {
-    return formatDistanceToNow(new Date(value), { addSuffix: true, locale: cs });
-  } catch {
-    return "";
-  }
+  try { return formatDistanceToNow(new Date(value), { addSuffix: true, locale: cs }); }
+  catch { return ""; }
 }
 
-function FeedCard({ article }: { article: FeedArticle }) {
+// Source domain → logo fallback
+function sourceDomain(name: string): string {
+  const map: Record<string, string> = {
+    "OpenAI Blog": "openai.com", "Google DeepMind": "deepmind.google",
+    "Hugging Face": "huggingface.co", "The Verge AI": "theverge.com",
+    "MIT Tech Review": "technologyreview.com", "TechCrunch AI": "techcrunch.com",
+    "The Decoder": "the-decoder.com", "Google AI Blog": "blog.google",
+    "NVIDIA Blog": "nvidia.com", "Anthropic News": "anthropic.com",
+    "Hacker News": "news.ycombinator.com", "Ars Technica": "arstechnica.com",
+    "The Verge": "theverge.com", "The Register": "theregister.com",
+    "9to5Mac": "9to5mac.com", "Engadget": "engadget.com",
+    "MacRumors": "macrumors.com", "BleepingComputer": "bleepingcomputer.com",
+    "Tom's Hardware": "tomshardware.com", "IEEE Spectrum": "spectrum.ieee.org",
+  };
+  return map[name] ?? "";
+}
+
+// ── Article reader modal ──────────────────────────────────────────────────────
+
+function ArticleModal({ article, onClose }: { article: FeedArticle; onClose: () => void }) {
+  const [content, setContent] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(article.image);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/article?url=${encodeURIComponent(article.url)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.content) setContent(data.content);
+        if (data.image && !article.image) setImage(data.image);
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [article.url, article.image]);
+
+  const title = article.title_cs ?? article.title;
+  const fallbackBody = article.summary_cs ?? article.summary;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(27,24,18,0.32)] p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.75rem] border border-[color:var(--line)] bg-[color:var(--surface)] shadow-2xl sm:max-h-[88vh] sm:rounded-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Close */}
+        <button
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 rounded-full bg-[color:var(--surface)]/90 p-1.5 text-[color:var(--muted)] backdrop-blur-sm hover:text-[color:var(--foreground)]"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* Hero image */}
+        {image && (
+          <div className="h-48 w-full flex-shrink-0 overflow-hidden sm:h-56">
+            <img src={image} alt="" className="h-full w-full object-cover" />
+          </div>
+        )}
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-5 pb-8 pt-5 sm:px-7">
+            {/* Meta */}
+            <div className="mb-3 flex items-center gap-2 text-[11px] font-medium text-[color:var(--muted)]">
+              <span>{article.source}</span>
+              <span className="opacity-40">·</span>
+              <span>{timeAgo(article.publishedAt)}</span>
+              {article.clusterSize > 1 && (
+                <><span className="opacity-40">·</span><span>{article.clusterSize} zdroje</span></>
+              )}
+            </div>
+
+            {/* Title */}
+            <h2
+              className="mb-4 text-[1.25rem] font-semibold leading-snug text-[color:var(--foreground)] sm:text-[1.4rem]"
+              style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+            >
+              {title}
+            </h2>
+
+            {/* Body */}
+            {loading ? (
+              <div className="flex items-center gap-2 text-sm text-[color:var(--muted)]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Načítám článek…
+              </div>
+            ) : error || !content ? (
+              <p className="text-[0.9rem] leading-relaxed text-[color:var(--foreground)]">{fallbackBody}</p>
+            ) : (
+              <div className="space-y-4">
+                {content.split("\n\n").slice(0, 30).map((para, i) => (
+                  <p key={i} className="text-[0.9rem] leading-[1.7] text-[color:var(--foreground)]">{para}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Open original */}
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 flex items-center gap-1.5 text-[0.8125rem] font-medium text-[color:var(--accent)] hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Otevřít originál na {article.source}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Feed card ─────────────────────────────────────────────────────────────────
+
+function FeedCard({ article, onClick }: { article: FeedArticle; onClick: () => void }) {
+  const [imgSrc, setImgSrc] = useState<string | null>(article.image);
+  const [imgError, setImgError] = useState(false);
+
   const title = article.title_cs ?? article.title;
   const body = article.summary_cs ?? article.summary;
+  const domain = sourceDomain(article.source);
+  const logoUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null;
 
   return (
     <article
       className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl bg-[color:var(--surface)] transition-all duration-150 hover:shadow-[0_4px_24px_rgba(39,26,0,0.10)]"
-      onClick={() => window.open(article.url, "_blank", "noopener,noreferrer")}
+      onClick={onClick}
     >
       {/* 16:9 image */}
-      <div
-        className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]"
-        style={{ aspectRatio: "16/9" }}
-      >
-        {article.image ? (
+      <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "16/9" }}>
+        {imgSrc && !imgError ? (
           <img
-            src={article.image}
+            src={imgSrc}
             alt={title}
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
+            onError={() => setImgError(true)}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-[color:var(--faint)]">
-            <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
+          /* Fallback: source logo centred on muted bg */
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={article.source}
+                className="h-8 w-8 rounded-md opacity-50"
+                onError={() => {}}
+              />
+            ) : (
+              <svg className="h-7 w-7 text-[color:var(--faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            )}
+            <span className="text-[10px] font-medium text-[color:var(--faint)]">{article.source}</span>
           </div>
+        )}
+        {/* Cluster badge */}
+        {article.clusterSize > 1 && (
+          <span className="absolute bottom-2 right-2 rounded-full bg-[rgba(27,24,18,0.6)] px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+            {article.clusterSize} zdrojů
+          </span>
         )}
       </div>
 
-      {/* Content */}
+      {/* Text */}
       <div className="flex flex-1 flex-col gap-2 px-4 py-3">
         <h3
           className="line-clamp-2 text-[0.9rem] font-medium leading-[1.35] text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]"
@@ -91,11 +229,8 @@ function FeedCard({ article }: { article: FeedArticle }) {
           {title}
         </h3>
         {body && (
-          <p className="line-clamp-3 flex-1 text-[0.8125rem] leading-[1.5] text-[color:var(--muted)]">
-            {body}
-          </p>
+          <p className="line-clamp-3 flex-1 text-[0.8125rem] leading-[1.5] text-[color:var(--muted)]">{body}</p>
         )}
-        {/* Meta row */}
         <div className="mt-auto flex items-center gap-1.5 pt-1 text-[11px] font-medium text-[color:var(--muted)]">
           <span className="truncate">{article.source}</span>
           <span className="opacity-40">·</span>
@@ -106,11 +241,14 @@ function FeedCard({ article }: { article: FeedArticle }) {
   );
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function FeedTab({ category }: { category: FeedCategory }) {
   const cache = caches[category];
   const [articles, setArticles] = useState<FeedArticle[]>(cache.articles);
   const [loading, setLoading] = useState(!cache.hydrated);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<FeedArticle | null>(null);
 
   const load = useEffectEvent(async (forceRefresh = false) => {
     setLoading(true);
@@ -125,9 +263,7 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
       cache.articles = items;
       cache.hydrated = true;
       cache.fetchedAt = Date.now();
-      try {
-        localStorage.setItem(storageKey(category), JSON.stringify({ articles: items, hydrated: true, fetchedAt: cache.fetchedAt }));
-      } catch {}
+      try { localStorage.setItem(storageKey(category), JSON.stringify({ articles: items, hydrated: true, fetchedAt: cache.fetchedAt })); } catch {}
     } catch (e) {
       setError(e instanceof Error ? e.message : "Neznámá chyba");
     } finally {
@@ -136,7 +272,6 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
   });
 
   useEffect(() => {
-    // Restore from localStorage
     try {
       const stored = localStorage.getItem(storageKey(category));
       if (stored) {
@@ -173,9 +308,7 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
   }, [load, category]);
 
   const refresh = useEffectEvent(() => {
-    cache.hydrated = false;
-    cache.articles = [];
-    cache.fetchedAt = 0;
+    cache.hydrated = false; cache.articles = []; cache.fetchedAt = 0;
     try { localStorage.removeItem(storageKey(category)); } catch {}
     setArticles([]);
     void load(true);
@@ -184,56 +317,58 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
   const heading = category === "ai" ? "Umělá inteligence" : "Technologie";
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h2
-          className="text-[1.1rem] font-semibold text-[color:var(--foreground)]"
-          style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
-        >
-          {heading}
-          {articles.length > 0 && (
-            <span className="ml-2 text-[0.85rem] font-normal text-[color:var(--muted)]">
-              {articles.length} článků
-            </span>
-          )}
-        </h2>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-          Aktualizovat
-        </button>
-      </div>
-
-      {error && <div className="py-12 text-center text-red-400">{error}</div>}
-
-      <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {articles.map(article => (
-          <FeedCard key={article.id} article={article} />
-        ))}
-        {loading && Array.from({ length: 8 }).map((_, i) => (
-          <div key={`sk-${i}`} className="overflow-hidden rounded-xl bg-[color:var(--surface)]">
-            <div className="aspect-video w-full animate-pulse bg-[color:var(--surface-muted)]" />
-            <div className="space-y-2 p-4">
-              <div className="h-4 w-3/4 animate-pulse rounded bg-[color:var(--surface-muted)]" />
-              <div className="h-3 w-full animate-pulse rounded bg-[color:var(--surface-muted)]" />
-              <div className="h-3 w-2/3 animate-pulse rounded bg-[color:var(--surface-muted)]" />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {!loading && articles.length === 0 && !error && (
-        <div className="py-16 text-center text-[color:var(--muted)]">Žádné články k zobrazení</div>
-      )}
-
-      {loading && articles.length > 0 && (
-        <div className="mt-8 flex justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-[color:var(--muted)]" />
+    <>
+      <div>
+        <div className="mb-6 flex items-center justify-between">
+          <h2
+            className="text-[1.1rem] font-semibold text-[color:var(--foreground)]"
+            style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+          >
+            {heading}
+            {articles.length > 0 && (
+              <span className="ml-2 text-[0.85rem] font-normal text-[color:var(--muted)]">{articles.length} článků</span>
+            )}
+          </h2>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+            Aktualizovat
+          </button>
         </div>
-      )}
-    </div>
+
+        {error && <div className="py-12 text-center text-red-400">{error}</div>}
+
+        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {articles.map(article => (
+            <FeedCard key={article.id} article={article} onClick={() => setSelected(article)} />
+          ))}
+          {loading && Array.from({ length: 8 }).map((_, i) => (
+            <div key={`sk-${i}`} className="overflow-hidden rounded-xl bg-[color:var(--surface)]">
+              <div className="aspect-video w-full animate-pulse bg-[color:var(--surface-muted)]" />
+              <div className="space-y-2 p-4">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-[color:var(--surface-muted)]" />
+                <div className="h-3 w-full animate-pulse rounded bg-[color:var(--surface-muted)]" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-[color:var(--surface-muted)]" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {!loading && articles.length === 0 && !error && (
+          <div className="py-16 text-center text-[color:var(--muted)]">Žádné články k zobrazení</div>
+        )}
+
+        {loading && articles.length > 0 && (
+          <div className="mt-8 flex justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-[color:var(--muted)]" />
+          </div>
+        )}
+      </div>
+
+      {selected && <ArticleModal article={selected} onClose={() => setSelected(null)} />}
+    </>
   );
 }

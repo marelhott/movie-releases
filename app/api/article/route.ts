@@ -1,0 +1,106 @@
+import { NextResponse } from "next/server";
+import { unstable_cache } from "next/cache";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+function extractReadableContent(html: string): { content: string; image: string | null; author: string | null } {
+  // Remove scripts, styles, nav, header, footer, aside
+  let clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, "")
+    .replace(/<figure[\s\S]*?<\/figure>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+
+  // Extract og:image
+  const ogImg = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+             ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+             ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i);
+  const image = ogImg?.[1]?.startsWith("http") ? ogImg[1] : null;
+
+  // Extract author
+  const authorMatch = html.match(/<meta[^>]+name=["']author["'][^>]+content=["']([^"']+)["']/i)
+                   ?? html.match(/class=["'][^"']*author[^"']*["'][^>]*>([^<]{2,60})</i);
+  const author = authorMatch?.[1]?.trim().replace(/<[^>]+>/g, "") ?? null;
+
+  // Try to find main article content in order of preference
+  const articlePatterns = [
+    /<article[^>]*>([\s\S]*?)<\/article>/i,
+    /<div[^>]+(?:class|id)=["'][^"']*(?:article-body|entry-content|post-content|article-content|story-body|main-content|content-body)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    /<main[^>]*>([\s\S]*?)<\/main>/i,
+  ];
+
+  let bodyHtml = "";
+  for (const pattern of articlePatterns) {
+    const m = clean.match(pattern);
+    if (m?.[1] && m[1].length > 200) {
+      bodyHtml = m[1];
+      break;
+    }
+  }
+
+  if (!bodyHtml) {
+    // Fallback: extract all <p> tags
+    const paragraphs = [...clean.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)];
+    bodyHtml = paragraphs.map(m => m[1]).join("\n");
+  }
+
+  // Strip remaining HTML tags and decode entities
+  const text = bodyHtml
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&hellip;/g, "...").replace(/&#\d+;/g, "")
+    .replace(/\s{3,}/g, "\n\n")
+    .trim();
+
+  // Split into paragraphs, filter noise
+  const paras = text
+    .split(/\n{2,}/)
+    .map(p => p.replace(/\s+/g, " ").trim())
+    .filter(p => p.length > 60); // drop short fragments (nav items, captions etc)
+
+  return { content: paras.join("\n\n"), image, author };
+}
+
+async function fetchArticle(url: string) {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(12000),
+    next: { revalidate: 3600 },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
+  return extractReadableContent(html);
+}
+
+const getCachedArticle = unstable_cache(
+  async (url: string) => fetchArticle(url),
+  ["article-content-v1"],
+  { revalidate: 3600 }
+);
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const url = searchParams.get("url");
+  if (!url || !url.startsWith("http")) {
+    return NextResponse.json({ error: "Missing url" }, { status: 400 });
+  }
+
+  try {
+    const data = await getCachedArticle(url);
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=7200" },
+    });
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}

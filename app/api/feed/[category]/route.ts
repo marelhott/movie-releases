@@ -129,25 +129,30 @@ async function fetchRss(source: FeedSource, limit = 8, fresh = false): Promise<F
 async function fetchOgImage(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
-      signal: AbortSignal.timeout(4000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      signal: AbortSignal.timeout(5000),
       next: { revalidate: 86400 },
     });
     if (!res.ok) return null;
-    // Read only first 8KB — og:image is always in <head>
+    // Read first 24KB — og:image is in <head>
     const reader = res.body?.getReader();
     if (!reader) return null;
+    const decoder = new TextDecoder();
     let html = "";
-    while (html.length < 8192) {
+    while (html.length < 24576) {
       const { done, value } = await reader.read();
       if (done) break;
-      html += new TextDecoder().decode(value);
+      html += decoder.decode(value, { stream: true });
     }
     reader.cancel().catch(() => {});
     const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
             ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
-            ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-            ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+            ?? html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i)
+            ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["']/i);
     const u = og?.[1];
     return u?.startsWith("http") ? u : null;
   } catch {
