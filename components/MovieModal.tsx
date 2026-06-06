@@ -30,31 +30,23 @@ function ReleaseCard({ release }: { release: MovieRelease }) {
   const badge = SOURCE_LABELS[release.source] ?? release.source.toUpperCase();
 
   const content = (
-    <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-3 transition-colors hover:bg-[color:var(--surface)]">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-[color:var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--foreground)]">
-          {badge}
-        </span>
-        {release.quality && (
-          <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--accent)]">
-            {release.quality}
-          </span>
-        )}
-      </div>
-      <p className="text-sm font-medium leading-snug text-[color:var(--foreground)]">{release.label}</p>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--muted)]">
-        {release.group && <span>Group: {release.group}</span>}
-        {release.size && <span>Velikost: {release.size}</span>}
-        {typeof release.seeds === "number" && <span>Seeds: {release.seeds}</span>}
-        {release.date && <span>{formatReleaseDate(release.date)}</span>}
-      </div>
+    <div className="flex items-baseline gap-2 py-1.5 text-sm">
+      <span className="w-14 flex-shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)]">{badge}</span>
+      {release.quality && (
+        <span className="flex-shrink-0 text-xs font-bold text-[color:var(--accent)]">{release.quality}</span>
+      )}
+      <span className="min-w-0 flex-1 truncate font-mono text-xs text-[color:var(--foreground)]">{release.label}</span>
+      <span className="flex-shrink-0 text-xs text-[color:var(--muted)]">
+        {release.size ?? (typeof release.seeds === "number" ? `▲${release.seeds}` : null)}
+      </span>
     </div>
   );
 
   if (!release.url) return content;
 
   return (
-    <a href={release.url} target="_blank" rel="noopener noreferrer" className="block">
+    <a href={release.url} target="_blank" rel="noopener noreferrer"
+      className="block rounded transition-colors hover:bg-[color:var(--surface-muted)]">
       {content}
     </a>
   );
@@ -63,18 +55,18 @@ function ReleaseCard({ release }: { release: MovieRelease }) {
 function CastCard({ member, onClick }: { member: CastMember; onClick?: () => void }) {
   const [err, setErr] = useState(false);
   return (
-    <button onClick={onClick} className="group w-20 flex-shrink-0 text-left">
-      <div className="relative mb-1 h-24 w-20 overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
+    <button onClick={onClick} className="group flex w-[72px] flex-shrink-0 flex-col items-center gap-1.5 text-center">
+      <div className="relative h-[88px] w-[72px] flex-shrink-0 overflow-hidden rounded-lg bg-[color:var(--surface-muted)]">
         {member.photo && !err ? (
-          <Image src={member.photo} alt={member.name} fill className="object-cover group-hover:scale-105 transition-transform" onError={() => setErr(true)} sizes="80px" />
+          <Image src={member.photo} alt={member.name} fill className="object-cover transition-transform group-hover:scale-105" onError={() => setErr(true)} sizes="72px" />
         ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-[color:var(--muted)]">
-              <Film className="w-5 h-5" />
-            </div>
-          )}
-        </div>
-      <p className="line-clamp-2 text-xs leading-tight text-[color:var(--foreground)] group-hover:text-[color:var(--accent)]">{member.name}</p>
-      {member.character && <p className="line-clamp-1 text-xs italic text-[color:var(--muted)]">{member.character}</p>}
+          <div className="absolute inset-0 flex items-center justify-center text-[color:var(--muted)]">
+            <Film className="w-5 h-5" />
+          </div>
+        )}
+      </div>
+      <p className="line-clamp-2 w-full text-[11px] font-semibold leading-tight text-[color:var(--foreground)] group-hover:text-[color:var(--accent)]">{member.name}</p>
+      {member.character && <p className="line-clamp-1 w-full text-[11px] italic leading-tight text-[color:var(--muted)]">{member.character}</p>}
     </button>
   );
 }
@@ -176,11 +168,13 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               {/* Cast */}
               {movie.cast.length > 0 && (
                 <div className="mt-5">
-                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Obsazení</p>
-                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin">
-                    {movie.cast.map(m => (
-                      <CastCard key={m.id} member={m} onClick={() => setPersonId(m.id)} />
-                    ))}
+                  <p className="mb-3 text-xs uppercase tracking-wider text-[color:var(--muted)]">Obsazení</p>
+                  <div className="-mx-4 overflow-x-auto px-4 sm:-mx-6 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex gap-4 pb-1">
+                      {movie.cast.map(m => (
+                        <CastCard key={m.id} member={m} onClick={() => setPersonId(m.id)} />
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -215,8 +209,8 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
 
               {movie.releases?.length > 0 && (
                 <div className="mt-5">
-                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Releasy</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <p className="mb-1 text-xs uppercase tracking-wider text-[color:var(--muted)]">Releasy</p>
+                  <div className="divide-y divide-[color:var(--line)]">
                     {movie.releases.map((release, index) => (
                       <ReleaseCard key={`${release.source}-${release.label}-${index}`} release={release} />
                     ))}
