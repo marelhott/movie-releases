@@ -2,39 +2,59 @@ import { NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
 import { unstable_cache } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
+import { jsonrepair } from "jsonrepair";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// ── Source lists ──────────────────────────────────────────────────────────────
+// ── Source definitions with weights ──────────────────────────────────────────
 
-const AI_SOURCES = [
-  { name: "OpenAI Blog", url: "https://openai.com/news/rss.xml", siteUrl: "https://openai.com/news" },
-  { name: "Google DeepMind", url: "https://deepmind.google/blog/rss.xml", siteUrl: "https://deepmind.google/blog/" },
-  { name: "Hugging Face", url: "https://huggingface.co/blog/feed.xml", siteUrl: "https://huggingface.co/blog" },
-  { name: "The Verge AI", url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", siteUrl: "https://www.theverge.com/ai-artificial-intelligence" },
-  { name: "MIT Tech Review AI", url: "https://www.technologyreview.com/topic/artificial-intelligence/feed/", siteUrl: "https://www.technologyreview.com/topic/artificial-intelligence/" },
-  { name: "TechCrunch AI", url: "https://techcrunch.com/category/artificial-intelligence/feed/", siteUrl: "https://techcrunch.com/category/artificial-intelligence/" },
-  { name: "VentureBeat AI", url: "https://venturebeat.com/category/ai/feed/", siteUrl: "https://venturebeat.com/category/ai/" },
-  { name: "The Decoder", url: "https://the-decoder.com/feed/", siteUrl: "https://the-decoder.com/" },
-  { name: "Microsoft AI Blog", url: "https://blogs.microsoft.com/ai/feed/", siteUrl: "https://blogs.microsoft.com/ai/" },
-  { name: "Google AI Blog", url: "https://blog.google/technology/ai/rss/", siteUrl: "https://blog.google/technology/ai/" },
+type FeedSource = { name: string; url: string; siteUrl: string; weight: number };
+
+const AI_SOURCES: FeedSource[] = [
+  { name: "OpenAI Blog",      url: "https://openai.com/news/rss.xml",                                            siteUrl: "https://openai.com/news",                          weight: 1.4 },
+  { name: "Google DeepMind",  url: "https://deepmind.google/blog/rss.xml",                                       siteUrl: "https://deepmind.google/blog/",                    weight: 1.3 },
+  { name: "Hugging Face",     url: "https://huggingface.co/blog/feed.xml",                                       siteUrl: "https://huggingface.co/blog",                      weight: 1.2 },
+  { name: "The Verge AI",     url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",          siteUrl: "https://www.theverge.com/ai-artificial-intelligence",weight: 1.2 },
+  { name: "MIT Tech Review",  url: "https://www.technologyreview.com/topic/artificial-intelligence/feed/",       siteUrl: "https://www.technologyreview.com/topic/artificial-intelligence/", weight: 1.2 },
+  { name: "TechCrunch AI",    url: "https://techcrunch.com/category/artificial-intelligence/feed/",              siteUrl: "https://techcrunch.com/category/artificial-intelligence/", weight: 1.1 },
+  { name: "The Decoder",      url: "https://the-decoder.com/feed/",                                              siteUrl: "https://the-decoder.com/",                         weight: 1.1  },
+  { name: "Google AI Blog",   url: "https://blog.google/technology/ai/rss/",                                     siteUrl: "https://blog.google/technology/ai/",               weight: 1.15 },
+  { name: "NVIDIA Blog",      url: "https://blogs.nvidia.com/feed/",                                             siteUrl: "https://blogs.nvidia.com/",                        weight: 1.08 },
+  { name: "Anthropic News",   url: "https://www.anthropic.com/rss.xml",                                          siteUrl: "https://www.anthropic.com/news",                   weight: 1.25 },
 ];
 
-const TECH_SOURCES = [
-  { name: "Hacker News", url: "https://news.ycombinator.com/rss", siteUrl: "https://news.ycombinator.com/" },
-  { name: "Ars Technica", url: "https://feeds.arstechnica.com/arstechnica/index", siteUrl: "https://arstechnica.com/" },
-  { name: "The Verge", url: "https://www.theverge.com/rss/index.xml", siteUrl: "https://www.theverge.com/" },
-  { name: "The Register", url: "https://www.theregister.com/headlines.atom", siteUrl: "https://www.theregister.com/" },
-  { name: "9to5Mac", url: "https://9to5mac.com/feed/", siteUrl: "https://9to5mac.com/" },
-  { name: "Engadget", url: "https://www.engadget.com/rss.xml", siteUrl: "https://www.engadget.com/" },
-  { name: "MacRumors", url: "https://www.macrumors.com/macrumors.xml", siteUrl: "https://www.macrumors.com/" },
-  { name: "BleepingComputer", url: "https://www.bleepingcomputer.com/feed/", siteUrl: "https://www.bleepingcomputer.com/" },
-  { name: "Tom's Hardware", url: "https://www.tomshardware.com/feeds/all", siteUrl: "https://www.tomshardware.com/" },
-  { name: "IEEE Spectrum", url: "https://spectrum.ieee.org/rss/fulltext", siteUrl: "https://spectrum.ieee.org/" },
+const TECH_SOURCES: FeedSource[] = [
+  { name: "Hacker News",      url: "https://news.ycombinator.com/rss",                                           siteUrl: "https://news.ycombinator.com/",                    weight: 1.15 },
+  { name: "Ars Technica",     url: "https://feeds.arstechnica.com/arstechnica/index",                            siteUrl: "https://arstechnica.com/",                         weight: 1.1 },
+  { name: "The Verge",        url: "https://www.theverge.com/rss/index.xml",                                     siteUrl: "https://www.theverge.com/",                        weight: 1.05 },
+  { name: "The Register",     url: "https://www.theregister.com/headlines.atom",                                  siteUrl: "https://www.theregister.com/",                     weight: 1.05 },
+  { name: "9to5Mac",          url: "https://9to5mac.com/feed/",                                                   siteUrl: "https://9to5mac.com/",                             weight: 1.0 },
+  { name: "Engadget",         url: "https://www.engadget.com/rss.xml",                                           siteUrl: "https://www.engadget.com/",                        weight: 1.0 },
+  { name: "MacRumors",        url: "https://www.macrumors.com/macrumors.xml",                                    siteUrl: "https://www.macrumors.com/",                       weight: 0.98 },
+  { name: "BleepingComputer", url: "https://www.bleepingcomputer.com/feed/",                                     siteUrl: "https://www.bleepingcomputer.com/",                weight: 1.02 },
+  { name: "Tom's Hardware",   url: "https://www.tomshardware.com/feeds/all",                                     siteUrl: "https://www.tomshardware.com/",                    weight: 0.98 },
+  { name: "IEEE Spectrum",    url: "https://spectrum.ieee.org/rss/fulltext",                                     siteUrl: "https://spectrum.ieee.org/",                       weight: 1.05 },
 ];
 
-// ── RSS parser ────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type FeedArticle = {
+  id: string;
+  title: string;
+  title_cs?: string;
+  summary: string;
+  summary_cs?: string;
+  url: string;
+  image: string | null;
+  source: string;
+  sourceWeight: number;
+  publishedAt: string;
+  clusterSize: number;
+  score: number;
+};
+
+// ── XML parser ────────────────────────────────────────────────────────────────
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -44,35 +64,28 @@ const xmlParser = new XMLParser({
 
 function decodeEntities(str: string): string {
   return str
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&hellip;/g, "...")
-    .replace(/<[^>]+>/g, "")
-    .trim();
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&hellip;/g, "...").replace(/<[^>]+>/g, "").trim();
 }
 
 function extractImage(item: any): string | null {
-  // media:content
   const mc = item["media:content"] ?? item["media:thumbnail"];
   if (mc) {
-    const url = mc["@_url"] ?? mc?.["$"]?.url;
-    if (typeof url === "string" && url.startsWith("http")) return url;
+    const u = mc["@_url"] ?? mc?.["$"]?.url;
+    if (typeof u === "string" && u.startsWith("http")) return u;
   }
-  // enclosure
-  if (item.enclosure?.["@_url"]) return item.enclosure["@_url"];
-  if (item.enclosure?.url) return item.enclosure.url;
-  // content/description — grab first img src
-  const raw = item["content:encoded"] ?? item.content ?? item.description ?? "";
-  const m = String(raw).match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (m?.[1]) return m[1];
+  if (item.enclosure?.["@_url"]?.startsWith("http")) return item.enclosure["@_url"];
+  if (item.enclosure?.url?.startsWith("http")) return item.enclosure.url;
+  const raw = String(item["content:encoded"] ?? item.content ?? item.description ?? "");
+  const m = raw.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (m?.[1]?.startsWith("http")) return m[1];
   return null;
 }
 
-async function fetchRss(source: { name: string; url: string; siteUrl: string }, limit = 8, fresh = false) {
+// ── RSS fetch ─────────────────────────────────────────────────────────────────
+
+async function fetchRss(source: FeedSource, limit = 8, fresh = false): Promise<FeedArticle[]> {
   try {
     const res = await fetch(source.url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
@@ -82,7 +95,6 @@ async function fetchRss(source: { name: string; url: string; siteUrl: string }, 
     if (!res.ok) return [];
     const text = await res.text();
     const parsed = xmlParser.parse(text);
-
     const channel = parsed?.rss?.channel ?? parsed?.feed ?? {};
     const rawItems: any[] = channel.item ?? channel.entry ?? [];
     const items = Array.isArray(rawItems) ? rawItems : [rawItems];
@@ -90,22 +102,23 @@ async function fetchRss(source: { name: string; url: string; siteUrl: string }, 
     return items.slice(0, limit).map((item: any) => {
       const title = decodeEntities(String(item.title?.["#text"] ?? item.title ?? ""));
       const summary = decodeEntities(
-        String(item["content:encoded"] ?? item.content?.["#text"] ?? item.content ?? item.description ?? "").slice(0, 300)
+        String(item["content:encoded"] ?? item.content?.["#text"] ?? item.content ?? item.description ?? "").slice(0, 400)
       );
       const link = item.link?.["@_href"] ?? item.link?.["#text"] ?? item.link ?? source.siteUrl;
       const pubDate = item.pubDate ?? item.updated ?? item.published ?? null;
-      const image = extractImage(item);
-
       return {
-        id: item.guid?.["#text"] ?? item.guid ?? item.id ?? link,
+        id: String(item.guid?.["#text"] ?? item.guid ?? item.id ?? link),
         title,
         summary,
         url: typeof link === "string" ? link.trim() : source.siteUrl,
-        image,
+        image: extractImage(item),
         source: source.name,
+        sourceWeight: source.weight,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        clusterSize: 1,
+        score: 0,
       };
-    }).filter((a: any) => a.title && a.url);
+    }).filter(a => a.title && a.url);
   } catch {
     return [];
   }
@@ -121,106 +134,199 @@ async function fetchOgImage(url: string): Promise<string | null> {
       next: { revalidate: 86400 },
     });
     if (!res.ok) return null;
-    const html = await res.text();
-    // og:image
+    // Read only first 8KB — og:image is always in <head>
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    let html = "";
+    while (html.length < 8192) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += new TextDecoder().decode(value);
+    }
+    reader.cancel().catch(() => {});
     const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-    if (og?.[1]) return og[1];
-    // twitter:image
-    const tw = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
-      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-    if (tw?.[1]) return tw[1];
-    return null;
+            ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+            ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+            ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    const u = og?.[1];
+    return u?.startsWith("http") ? u : null;
   } catch {
     return null;
   }
 }
 
-async function enrichImages(articles: any[]): Promise<any[]> {
+async function enrichImages(articles: FeedArticle[]): Promise<FeedArticle[]> {
   const missing = articles.filter(a => !a.image);
-  // Enrich up to 20 articles without images, in parallel
-  const enriched = await Promise.all(
-    missing.slice(0, 20).map(async a => ({
-      url: a.url,
-      image: await fetchOgImage(a.url),
-    }))
+  const results = await Promise.all(
+    missing.slice(0, 24).map(a => fetchOgImage(a.url).then(image => ({ url: a.url, image })))
   );
-  const imageMap = new Map(enriched.map(e => [e.url, e.image]));
-  return articles.map(a => ({
-    ...a,
-    image: a.image ?? imageMap.get(a.url) ?? null,
-  }));
+  const map = new Map(results.map(r => [r.url, r.image]));
+  return articles.map(a => ({ ...a, image: a.image ?? map.get(a.url) ?? null }));
 }
 
-// ── Translation ───────────────────────────────────────────────────────────────
+// ── Two-level deduplication + clustering ─────────────────────────────────────
 
-async function translateBatch(articles: any[]): Promise<any[]> {
+const STOP_WORDS = new Set([
+  "a","an","the","and","or","but","in","on","at","to","for","of","with","by","from",
+  "is","are","was","were","be","been","being","have","has","had","do","does","did",
+  "will","would","could","should","may","might","can","this","that","these","those",
+  "it","its","he","she","they","we","you","i","me","him","her","us","them",
+  "new","says","say","said","report","reports","update","updates","gets","get",
+]);
+
+function tokenize(title: string): Set<string> {
+  return new Set(
+    title.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+  );
+}
+
+function jaccardSimilarity(a: string, b: string): number {
+  const setA = tokenize(a);
+  const setB = tokenize(b);
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const w of setA) if (setB.has(w)) intersection++;
+  return intersection / (setA.size + setB.size - intersection);
+}
+
+function clusterAndDeduplicate(articles: FeedArticle[]): FeedArticle[] {
+  // Level 1: URL dedup
+  const byUrl = new Map<string, FeedArticle>();
+  for (const a of articles) {
+    if (!byUrl.has(a.url)) byUrl.set(a.url, a);
+  }
+  const unique = Array.from(byUrl.values());
+
+  // Level 2: Title similarity clustering (Jaccard ≥ 0.38 = same story)
+  const THRESHOLD = 0.38;
+  const clusterId = new Array(unique.length).fill(-1);
+  let nextCluster = 0;
+
+  for (let i = 0; i < unique.length; i++) {
+    if (clusterId[i] !== -1) continue;
+    clusterId[i] = nextCluster;
+    for (let j = i + 1; j < unique.length; j++) {
+      if (clusterId[j] !== -1) continue;
+      if (jaccardSimilarity(unique[i].title, unique[j].title) >= THRESHOLD) {
+        clusterId[j] = nextCluster;
+      }
+    }
+    nextCluster++;
+  }
+
+  // Group by cluster, pick best representative
+  const clusters = new Map<number, FeedArticle[]>();
+  for (let i = 0; i < unique.length; i++) {
+    const cid = clusterId[i];
+    if (!clusters.has(cid)) clusters.set(cid, []);
+    clusters.get(cid)!.push(unique[i]);
+  }
+
+  return Array.from(clusters.values()).map(members => {
+    // Best member = highest source weight
+    const best = members.reduce((a, b) => a.sourceWeight >= b.sourceWeight ? a : b);
+    return { ...best, clusterSize: members.length };
+  });
+}
+
+// ── Ranking ───────────────────────────────────────────────────────────────────
+
+function rankArticles(articles: FeedArticle[]): FeedArticle[] {
+  const now = Date.now();
+  return articles
+    .map(a => {
+      const ageHours = (now - new Date(a.publishedAt).getTime()) / 3_600_000;
+      const recency = Math.exp(-ageHours / 20);           // half-life ~20h
+      const clusterBonus = 1 + Math.log(a.clusterSize);   // logarithmic cluster boost
+      const score = a.sourceWeight * recency * clusterBonus;
+      return { ...a, score };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+// ── Translation with jsonrepair ───────────────────────────────────────────────
+
+async function translateBatch(articles: FeedArticle[]): Promise<FeedArticle[]> {
   const key = process.env.MOVIE_ANTHROPIC_KEY;
-  if (!key) return articles;
+  if (!key) return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
 
   try {
     const client = new Anthropic({ apiKey: key });
-    const toTranslate = articles.filter(a => a.title).slice(0, 20);
+    const slice = articles.slice(0, 24);
 
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
+      max_tokens: 2500,
       messages: [{
         role: "user",
-        content: `Přelož titulky a perex (summary) těchto zpráv do češtiny. Zachovej přesný smysl, piš přirozenou novinářskou češtinou se správnou diakritikou.
+        content: `Přelož titulky a perex těchto zpráv do češtiny. Piš přirozenou novinářskou češtinou se správnou diakritikou.
 
-Vrať POUZE JSON pole ve formátu:
+Vrať POUZE JSON pole:
 [{"title_cs":"...","summary_cs":"..."}]
 
 Zprávy:
-${JSON.stringify(toTranslate.map(a => ({ title: a.title, summary: a.summary })))}`,
+${JSON.stringify(slice.map(a => ({ title: a.title, summary: a.summary })))}`,
       }],
     });
 
-    const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-    const match = text.match(/\[[\s\S]*\]/);
-    if (!match) return articles;
-    const translations: { title_cs: string; summary_cs: string }[] = JSON.parse(match[0]);
+    const raw = msg.content[0].type === "text" ? msg.content[0].text : "[]";
+    // Extract JSON array and repair if malformed
+    const match = raw.match(/\[[\s\S]*\]/);
+    const jsonStr = match ? match[0] : "[]";
+    let translations: { title_cs: string; summary_cs: string }[] = [];
+    try {
+      translations = JSON.parse(jsonStr);
+    } catch {
+      try {
+        translations = JSON.parse(jsonrepair(jsonStr));
+      } catch {
+        // Translation failed, fall back to originals
+      }
+    }
 
     return articles.map((a, i) => ({
       ...a,
-      title_cs: translations[i]?.title_cs ?? a.title,
-      summary_cs: translations[i]?.summary_cs ?? a.summary,
+      title_cs: translations[i]?.title_cs?.trim() || a.title,
+      summary_cs: translations[i]?.summary_cs?.trim() || a.summary,
     }));
   } catch {
     return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
   }
 }
 
-// ── Build feed ────────────────────────────────────────────────────────────────
+// ── Build feed pipeline ───────────────────────────────────────────────────────
 
-async function buildFeed(category: "ai" | "tech", fresh = false) {
+async function buildFeed(category: "ai" | "tech", fresh = false): Promise<FeedArticle[]> {
   const sources = category === "ai" ? AI_SOURCES : TECH_SOURCES;
 
-  const rawBatches = await Promise.all(sources.map(s => fetchRss(s, 6, fresh)));
+  // 1. Fetch all sources in parallel
+  const rawBatches = await Promise.all(sources.map(s => fetchRss(s, 7, fresh)));
   const allRaw = rawBatches.flat();
 
-  // Deduplicate by URL
-  const seen = new Set<string>();
-  const deduped = allRaw.filter(a => {
-    if (seen.has(a.url)) return false;
-    seen.add(a.url);
-    return true;
-  });
+  // 2. Two-level dedup + story clustering
+  const clustered = clusterAndDeduplicate(allRaw);
 
-  // Sort by date desc, keep top 40
-  const sorted = deduped
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-    .slice(0, 40);
+  // 3. Rank by source weight × recency × cluster bonus
+  const ranked = rankArticles(clustered);
 
-  const withImages = await enrichImages(sorted);
+  // 4. Keep top 40
+  const top = ranked.slice(0, 40);
+
+  // 5. OG image enrichment for articles without images
+  const withImages = await enrichImages(top);
+
+  // 6. Translate with jsonrepair safety net
   const translated = await translateBatch(withImages);
+
   return translated;
 }
 
 const getCachedFeed = unstable_cache(
   async (category: "ai" | "tech") => buildFeed(category),
-  ["feed-category-v1"],
+  ["feed-category-v2"],
   { revalidate: 1800 }
 );
 
@@ -234,7 +340,6 @@ export async function GET(
   if (category !== "ai" && category !== "tech") {
     return NextResponse.json({ error: "Unknown category" }, { status: 400 });
   }
-
   const forceRefresh = new URL(request.url).searchParams.has("refresh");
   const articles = forceRefresh
     ? await buildFeed(category, true)
@@ -242,9 +347,7 @@ export async function GET(
 
   return NextResponse.json({ articles }, {
     headers: {
-      "Cache-Control": forceRefresh
-        ? "no-store"
-        : "public, s-maxage=1800, stale-while-revalidate=3600",
+      "Cache-Control": forceRefresh ? "no-store" : "public, s-maxage=1800, stale-while-revalidate=3600",
     },
   });
 }

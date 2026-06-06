@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { XMLParser } from "fast-xml-parser";
 import { unstable_cache } from "next/cache";
+import { jsonrepair } from "jsonrepair";
 
 const RSS_ITEMS_PER_SOURCE = 18;
 const DEFAULT_PAGE_SIZE = 30;
@@ -805,7 +806,9 @@ ${JSON.stringify(payload)}`;
   const cleaned = raw.replace(/```(?:json)?\n?/g, "").trim();
   const match = cleaned.match(/\[[\s\S]*\]/);
   if (!match) throw new Error("Missing JSON array");
-  const generated = JSON.parse(match[0]) as Array<{
+  let parsedJson: string = match[0];
+  try { JSON.parse(parsedJson); } catch { parsedJson = jsonrepair(parsedJson); }
+  const generated = JSON.parse(parsedJson) as Array<{
     i: number;
     title_cs?: string;
     body_cs?: string;

@@ -6,12 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify-feeds": "npx tsx scripts/verify-feeds.ts",
+    "verify-feeds:ai": "npx tsx scripts/verify-feeds.ts --category ai",
+    "verify-feeds:tech": "npx tsx scripts/verify-feeds.ts --category tech",
+    "verify-feeds:claude": "npx tsx scripts/verify-feeds.ts --claude"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
     "date-fns": "^4.4.0",
     "fast-xml-parser": "^5.8.0",
+    "jsonrepair": "^3.14.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.7",
     "react": "19.2.4",
