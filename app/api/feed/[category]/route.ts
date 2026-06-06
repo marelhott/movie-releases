@@ -252,53 +252,71 @@ function rankArticles(articles: FeedArticle[]): FeedArticle[] {
     .sort((a, b) => b.score - a.score);
 }
 
-// ── Translation with jsonrepair ───────────────────────────────────────────────
+// ── Translation via DeepL (primary) + Claude fallback ────────────────────────
+
+async function translateWithDeepL(texts: string[]): Promise<string[]> {
+  const key = process.env.DEEPL_API_KEY;
+  if (!key || texts.length === 0) return texts;
+  try {
+    const body = new URLSearchParams({ target_lang: "CS", tag_handling: "text" });
+    texts.forEach(t => body.append("text", t));
+    const res = await fetch("https://api-free.deepl.com/v2/translate", {
+      method: "POST",
+      headers: { Authorization: `DeepL-Auth-Key ${key}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return texts;
+    const data = await res.json();
+    return (data.translations as { text: string }[]).map(t => t.text);
+  } catch {
+    return texts;
+  }
+}
 
 async function translateBatch(articles: FeedArticle[]): Promise<FeedArticle[]> {
-  const key = process.env.MOVIE_ANTHROPIC_KEY;
-  if (!key) return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
+  if (articles.length === 0) return articles;
+
+  // Collect all texts to translate: interleaved [title0, summary0, title1, summary1, ...]
+  const slice = articles.slice(0, 30);
+  const texts = slice.flatMap(a => [a.title, a.summary || ""]);
 
   try {
-    const client = new Anthropic({ apiKey: key });
-    const slice = articles.slice(0, 24);
+    const translated = await translateWithDeepL(texts);
 
-    const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2500,
-      messages: [{
-        role: "user",
-        content: `Přelož titulky a perex těchto zpráv do češtiny. Piš přirozenou novinářskou češtinou se správnou diakritikou.
-
-Vrať POUZE JSON pole:
-[{"title_cs":"...","summary_cs":"..."}]
-
-Zprávy:
-${JSON.stringify(slice.map(a => ({ title: a.title, summary: a.summary })))}`,
-      }],
+    return articles.map((a, i) => {
+      if (i >= slice.length) return { ...a, title_cs: a.title, summary_cs: a.summary };
+      const title_cs = translated[i * 2]?.trim() || a.title;
+      const summary_cs = translated[i * 2 + 1]?.trim() || a.summary;
+      return { ...a, title_cs, summary_cs };
     });
-
-    const raw = msg.content[0].type === "text" ? msg.content[0].text : "[]";
-    // Extract JSON array and repair if malformed
-    const match = raw.match(/\[[\s\S]*\]/);
-    const jsonStr = match ? match[0] : "[]";
-    let translations: { title_cs: string; summary_cs: string }[] = [];
-    try {
-      translations = JSON.parse(jsonStr);
-    } catch {
-      try {
-        translations = JSON.parse(jsonrepair(jsonStr));
-      } catch {
-        // Translation failed, fall back to originals
-      }
-    }
-
-    return articles.map((a, i) => ({
-      ...a,
-      title_cs: translations[i]?.title_cs?.trim() || a.title,
-      summary_cs: translations[i]?.summary_cs?.trim() || a.summary,
-    }));
   } catch {
-    return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
+    // Claude fallback with jsonrepair
+    const claudeKey = process.env.MOVIE_ANTHROPIC_KEY;
+    if (!claudeKey) return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
+    try {
+      const client = new Anthropic({ apiKey: claudeKey });
+      const msg = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2500,
+        messages: [{
+          role: "user",
+          content: `Přelož titulky a perex do češtiny. Vrať POUZE JSON pole:\n[{"title_cs":"...","summary_cs":"..."}]\n\n${JSON.stringify(slice.map(a => ({ title: a.title, summary: a.summary })))}`,
+        }],
+      });
+      const raw = msg.content[0].type === "text" ? msg.content[0].text : "[]";
+      const match = raw.match(/\[[\s\S]*\]/);
+      const jsonStr = match ? match[0] : "[]";
+      let tr: { title_cs: string; summary_cs: string }[] = [];
+      try { tr = JSON.parse(jsonStr); } catch { try { tr = JSON.parse(jsonrepair(jsonStr)); } catch {} }
+      return articles.map((a, i) => ({
+        ...a,
+        title_cs: tr[i]?.title_cs?.trim() || a.title,
+        summary_cs: tr[i]?.summary_cs?.trim() || a.summary,
+      }));
+    } catch {
+      return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
+    }
   }
 }
 
@@ -331,7 +349,7 @@ async function buildFeed(category: "ai" | "tech", fresh = false): Promise<FeedAr
 
 const getCachedFeed = unstable_cache(
   async (category: "ai" | "tech") => buildFeed(category),
-  ["feed-category-v2"],
+  ["feed-category-v3"],
   { revalidate: 1800 }
 );
 
