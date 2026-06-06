@@ -252,72 +252,74 @@ function rankArticles(articles: FeedArticle[]): FeedArticle[] {
     .sort((a, b) => b.score - a.score);
 }
 
-// ── Translation via DeepL (primary) + Claude fallback ────────────────────────
+// ── Translation via Gemini (primary) + Claude fallback ───────────────────────
 
-async function translateWithDeepL(texts: string[]): Promise<string[]> {
-  const key = process.env.DEEPL_API_KEY;
-  if (!key || texts.length === 0) return texts;
-  try {
-    const body = new URLSearchParams({ target_lang: "CS", tag_handling: "text" });
-    texts.forEach(t => body.append("text", t));
-    const res = await fetch("https://api-free.deepl.com/v2/translate", {
+async function translateWithGemini(articles: { title: string; summary: string }[]): Promise<{ title_cs: string; summary_cs: string }[]> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || articles.length === 0) throw new Error("no key");
+
+  const prompt = `Přelož titulky a perexe těchto zpráv do češtiny. Piš přirozenou novinářskou češtinou se správnou diakritikou.
+Vrať POUZE JSON pole ve formátu:
+[{"title_cs":"...","summary_cs":"..."}]
+
+Zprávy:
+${JSON.stringify(articles)}`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${key}`,
+    {
       method: "POST",
-      headers: { Authorization: `DeepL-Auth-Key ${key}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return texts;
-    const data = await res.json();
-    return (data.translations as { text: string }[]).map(t => t.text);
-  } catch {
-    return texts;
-  }
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      signal: AbortSignal.timeout(25000),
+    }
+  );
+  if (!res.ok) throw new Error(`Gemini ${res.status}`);
+  const data = await res.json();
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+  const match = raw.match(/\[[\s\S]*\]/);
+  const jsonStr = match ? match[0] : "[]";
+  let parsed: { title_cs: string; summary_cs: string }[] = [];
+  try { parsed = JSON.parse(jsonStr); }
+  catch { try { parsed = JSON.parse(jsonrepair(jsonStr)); } catch {} }
+  return parsed;
 }
 
 async function translateBatch(articles: FeedArticle[]): Promise<FeedArticle[]> {
   if (articles.length === 0) return articles;
-
-  // Collect all texts to translate: interleaved [title0, summary0, title1, summary1, ...]
   const slice = articles.slice(0, 30);
-  const texts = slice.flatMap(a => [a.title, a.summary || ""]);
+  const input = slice.map(a => ({ title: a.title, summary: a.summary || "" }));
 
+  let translations: { title_cs: string; summary_cs: string }[] = [];
+
+  // Primary: Gemini
   try {
-    const translated = await translateWithDeepL(texts);
-
-    return articles.map((a, i) => {
-      if (i >= slice.length) return { ...a, title_cs: a.title, summary_cs: a.summary };
-      const title_cs = translated[i * 2]?.trim() || a.title;
-      const summary_cs = translated[i * 2 + 1]?.trim() || a.summary;
-      return { ...a, title_cs, summary_cs };
-    });
+    translations = await translateWithGemini(input);
   } catch {
-    // Claude fallback with jsonrepair
+    // Fallback: Claude + jsonrepair
     const claudeKey = process.env.MOVIE_ANTHROPIC_KEY;
-    if (!claudeKey) return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
-    try {
-      const client = new Anthropic({ apiKey: claudeKey });
-      const msg = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2500,
-        messages: [{
-          role: "user",
-          content: `Přelož titulky a perex do češtiny. Vrať POUZE JSON pole:\n[{"title_cs":"...","summary_cs":"..."}]\n\n${JSON.stringify(slice.map(a => ({ title: a.title, summary: a.summary })))}`,
-        }],
-      });
-      const raw = msg.content[0].type === "text" ? msg.content[0].text : "[]";
-      const match = raw.match(/\[[\s\S]*\]/);
-      const jsonStr = match ? match[0] : "[]";
-      let tr: { title_cs: string; summary_cs: string }[] = [];
-      try { tr = JSON.parse(jsonStr); } catch { try { tr = JSON.parse(jsonrepair(jsonStr)); } catch {} }
-      return articles.map((a, i) => ({
-        ...a,
-        title_cs: tr[i]?.title_cs?.trim() || a.title,
-        summary_cs: tr[i]?.summary_cs?.trim() || a.summary,
-      }));
-    } catch {
-      return articles.map(a => ({ ...a, title_cs: a.title, summary_cs: a.summary }));
+    if (claudeKey) {
+      try {
+        const client = new Anthropic({ apiKey: claudeKey });
+        const msg = await client.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 2500,
+          messages: [{ role: "user", content: `Přelož do češtiny. Vrať POUZE JSON pole:\n[{"title_cs":"...","summary_cs":"..."}]\n\n${JSON.stringify(input)}` }],
+        });
+        const raw = msg.content[0].type === "text" ? msg.content[0].text : "[]";
+        const match = raw.match(/\[[\s\S]*\]/);
+        const jsonStr = match ? match[0] : "[]";
+        try { translations = JSON.parse(jsonStr); }
+        catch { try { translations = JSON.parse(jsonrepair(jsonStr)); } catch {} }
+      } catch {}
     }
   }
+
+  return articles.map((a, i) => ({
+    ...a,
+    title_cs: translations[i]?.title_cs?.trim() || a.title,
+    summary_cs: translations[i]?.summary_cs?.trim() || a.summary,
+  }));
 }
 
 // ── Build feed pipeline ───────────────────────────────────────────────────────
@@ -349,7 +351,7 @@ async function buildFeed(category: "ai" | "tech", fresh = false): Promise<FeedAr
 
 const getCachedFeed = unstable_cache(
   async (category: "ai" | "tech") => buildFeed(category),
-  ["feed-category-v3"],
+  ["feed-category-v4"],
   { revalidate: 1800 }
 );
 
