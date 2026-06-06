@@ -90,7 +90,7 @@ async function fetchRss(source: FeedSource, limit = 8, fresh = false): Promise<F
     const res = await fetch(source.url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; NewsBot/1.0)" },
       ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: 1800 } }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
     const text = await res.text();
@@ -162,8 +162,9 @@ async function fetchOgImage(url: string): Promise<string | null> {
 
 async function enrichImages(articles: FeedArticle[]): Promise<FeedArticle[]> {
   const missing = articles.filter(a => !a.image);
+  // Only top 8 to stay fast — rest get source logo fallback on client
   const results = await Promise.all(
-    missing.slice(0, 24).map(a => fetchOgImage(a.url).then(image => ({ url: a.url, image })))
+    missing.slice(0, 8).map(a => fetchOgImage(a.url).then(image => ({ url: a.url, image })))
   );
   const map = new Map(results.map(r => [r.url, r.image]));
   return articles.map(a => ({ ...a, image: a.image ?? map.get(a.url) ?? null }));
@@ -271,7 +272,7 @@ ${JSON.stringify(articles)}`;
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(12000),
     }
   );
   if (!res.ok) throw new Error(`Gemini ${res.status}`);
@@ -327,35 +328,44 @@ async function translateBatch(articles: FeedArticle[]): Promise<FeedArticle[]> {
 async function buildFeed(category: "ai" | "tech", fresh = false): Promise<FeedArticle[]> {
   const sources = category === "ai" ? AI_SOURCES : TECH_SOURCES;
 
-  // 1. Fetch all sources in parallel
+  // 1. Fetch all RSS sources in parallel
   const rawBatches = await Promise.all(sources.map(s => fetchRss(s, 7, fresh)));
   const allRaw = rawBatches.flat();
 
-  // 2. Two-level dedup + story clustering
-  const clustered = clusterAndDeduplicate(allRaw);
+  // 2. Two-level dedup + clustering + ranking
+  const top = rankArticles(clusterAndDeduplicate(allRaw)).slice(0, 40);
 
-  // 3. Rank by source weight × recency × cluster bonus
-  const ranked = rankArticles(clustered);
+  // 3. OG image enrichment + translation in PARALLEL (biggest speedup)
+  const [withImages, translations] = await Promise.all([
+    enrichImages(top),
+    translateBatch(top),
+  ]);
 
-  // 4. Keep top 40
-  const top = ranked.slice(0, 40);
-
-  // 5. OG image enrichment for articles without images
-  const withImages = await enrichImages(top);
-
-  // 6. Translate with jsonrepair safety net
-  const translated = await translateBatch(withImages);
-
-  return translated;
+  // Merge: images from enrichImages, translations from translateBatch
+  return withImages.map((a, i) => ({
+    ...a,
+    title_cs: translations[i]?.title_cs ?? a.title,
+    summary_cs: translations[i]?.summary_cs ?? a.summary,
+  }));
 }
 
-const getCachedFeed = unstable_cache(
+export const getCachedFeed = unstable_cache(
   async (category: "ai" | "tech") => buildFeed(category),
-  ["feed-category-v4"],
-  { revalidate: 1800 }
+  ["feed-category-v5"],
+  { revalidate: 1200 }
 );
 
 // ── Handler ───────────────────────────────────────────────────────────────────
+
+export async function warmFeedCaches() {
+  const [ai, tech] = await Promise.allSettled([
+    buildFeed("ai"), buildFeed("tech"),
+  ]);
+  return {
+    ai: ai.status === "fulfilled" ? ai.value.length : 0,
+    tech: tech.status === "fulfilled" ? tech.value.length : 0,
+  };
+}
 
 export async function GET(
   request: Request,
