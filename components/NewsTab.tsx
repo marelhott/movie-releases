@@ -237,6 +237,29 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
             {article.body_cs}
           </p>
 
+          {/* Person snippet */}
+          {article.person && (
+            <button
+              className="group/person mt-1 flex items-center gap-2.5 rounded-lg border border-[color:var(--line)] px-2.5 py-2 text-left transition-colors hover:bg-[color:var(--surface-muted)]"
+              onClick={(e) => { e.stopPropagation(); setPersonId(article.person!.id); }}
+            >
+              {article.person.photo ? (
+                <img src={article.person.photo} alt={article.person.name}
+                  className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
+                  loading="lazy" decoding="async" />
+              ) : (
+                <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[color:var(--surface-muted)] flex items-center justify-center">
+                  <Film className="h-3.5 w-3.5 text-[color:var(--faint)]" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold leading-tight text-[color:var(--foreground)] group-hover/person:text-[color:var(--accent)]">{article.person.name}</p>
+                <p className="truncate text-[11px] text-[color:var(--muted)]">{article.person.known_for === "Acting" ? "Herec/herečka" : article.person.known_for === "Directing" ? "Režisér" : article.person.known_for}</p>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-[color:var(--faint)]" />
+            </button>
+          )}
+
           {/* Bottom meta row */}
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--muted)]">
             <span className="truncate">{article.source}</span>
@@ -251,19 +274,6 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
                 <span className="opacity-40">·</span>
                 <span className="flex-shrink-0 tabular-nums">{timeAgo(article.pubDate)}</span>
               </>
-            )}
-            {article.person && (
-              <button
-                className="ml-auto flex flex-shrink-0 items-center gap-1 transition-colors hover:text-[color:var(--foreground)]"
-                onClick={(e) => { e.stopPropagation(); setPersonId(article.person!.id); }}
-              >
-                {article.person.photo && (
-                  <img src={article.person.photo} alt={article.person.name}
-                    className="h-4 w-4 rounded-full object-cover"
-                    loading="lazy" decoding="async" />
-                )}
-                <span className="max-w-[80px] truncate">{article.person.name}</span>
-              </button>
             )}
           </div>
         </div>
