@@ -15,6 +15,9 @@ export default function MovieCard({ movie }: { movie: Movie }) {
   const [imgError, setImgError] = useState(false);
 
   const sceneSource = movie.sources?.find(s => ["srrdb", "predb", "scnsrc"].includes(s));
+  const hasYts = movie.sources?.includes("yts");
+  const isOnline = hasYts || Boolean(sceneSource);
+  const bestQuality = movie.releases?.find(r => r.quality)?.quality ?? movie.torrents?.[0]?.quality ?? null;
 
   return (
     <>
@@ -37,19 +40,23 @@ export default function MovieCard({ movie }: { movie: Movie }) {
             {movie.overview && <p className="line-clamp-4 text-xs text-stone-100">{movie.overview}</p>}
           </div>
 
-          {/* Badges */}
-          <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-            {movie.torrents?.[0] && (
-              <span className="rounded bg-[rgba(255,253,248,0.88)] px-1.5 py-0.5 text-xs font-bold leading-none text-[color:var(--accent)] backdrop-blur-sm">
-                {movie.torrents[0].quality}
+          {/* ONLINE badge */}
+          {isOnline && (
+            <div className="absolute bottom-2 left-2">
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-bold leading-none text-white shadow-md">
+                ● ONLINE{bestQuality ? ` · ${bestQuality}` : ""}
               </span>
-            )}
-            {sceneSource && (
-              <span className={`${SOURCE_COLORS[sceneSource] ?? "bg-zinc-700"} text-xs font-bold px-1.5 py-0.5 rounded text-white backdrop-blur-sm leading-none`}>
+            </div>
+          )}
+
+          {/* Scene source badge */}
+          {sceneSource && (
+            <div className="absolute top-2 right-2">
+              <span className={`${SOURCE_COLORS[sceneSource] ?? "bg-zinc-700"} text-[10px] font-bold px-1.5 py-0.5 rounded text-white leading-none`}>
                 {sceneSource.toUpperCase()}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Info */}

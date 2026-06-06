@@ -435,13 +435,32 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
       if (normalised.length >= NORMALIZE_TARGET_COUNT) break;
     }
 
+    const SCENE_SOURCES = new Set(["yts", "srrdb", "predb", "scnsrc"]);
+
+    function hasSceneRelease(movie: any): boolean {
+      return (movie.sources ?? []).some((s: string) => SCENE_SOURCES.has(s));
+    }
+
+    function sceneReleaseTimestamp(movie: any): number {
+      const dates = (movie.releases ?? [])
+        .filter((r: any) => SCENE_SOURCES.has(r.source))
+        .map((r: any) => getTimestamp(r.date))
+        .filter((t: number) => t > 0);
+      return dates.length > 0 ? Math.max(...dates) : 0;
+    }
+
     const movies = deduplicate(normalised)
       .sort((left, right) => {
+        const leftScene = hasSceneRelease(left);
+        const rightScene = hasSceneRelease(right);
+        if (leftScene !== rightScene) return leftScene ? -1 : 1;
+        if (leftScene && rightScene) {
+          const bySceneDate = sceneReleaseTimestamp(right) - sceneReleaseTimestamp(left);
+          if (bySceneDate !== 0) return bySceneDate;
+        }
         const byDate = getTimestamp(right.date_added) - getTimestamp(left.date_added);
         if (byDate !== 0) return byDate;
-        const byYear = Number(right.year ?? 0) - Number(left.year ?? 0);
-        if (byYear !== 0) return byYear;
-        return String(left.title ?? "").localeCompare(String(right.title ?? ""));
+        return Number(right.year ?? 0) - Number(left.year ?? 0);
       })
       .filter(m => m.poster)
       .slice(0, MOVIES_PAGE_LIMIT);
