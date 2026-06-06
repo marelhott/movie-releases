@@ -3,7 +3,7 @@ import { fetchSrrdb, fetchPredb, fetchScnsrcScene } from "@/lib/sceneSources";
 import Anthropic from "@anthropic-ai/sdk";
 import { unstable_cache } from "next/cache";
 
-export const dynamic = "auto";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 const getKeys = () => ({
   tmdb: process.env.TMDB_API_KEY,

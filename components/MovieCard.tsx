@@ -2,78 +2,69 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Star, Clock, Calendar } from "lucide-react";
+import { Star } from "lucide-react";
 import { Movie } from "@/types/movie";
 import MovieModal from "./MovieModal";
-
-const SOURCE_COLORS: Record<string, string> = {
-  srrdb: "bg-purple-600/80", predb: "bg-blue-600/80", scnsrc: "bg-orange-600/80",
-};
 
 export default function MovieCard({ movie }: { movie: Movie }) {
   const [open, setOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  const sceneSource = movie.sources?.find(s => ["srrdb", "predb", "scnsrc"].includes(s));
   const hasYts = movie.sources?.includes("yts");
-  const isOnline = hasYts || Boolean(sceneSource);
+  const isOnline = hasYts || movie.sources?.some(s => ["srrdb", "predb", "scnsrc"].includes(s));
   const bestQuality = movie.releases?.find(r => r.quality)?.quality ?? movie.torrents?.[0]?.quality ?? null;
+  const genre = movie.genres?.[0] ?? null;
 
   return (
     <>
       <div
-        className="group relative cursor-pointer overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl bg-[color:var(--surface)] transition-all duration-150 hover:shadow-[0_4px_24px_rgba(39,26,0,0.10)]"
         onClick={() => setOpen(true)}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "240px 360px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "200px 360px" }}
       >
-        {/* Poster */}
-        <div className="relative aspect-[2/3] w-full bg-[color:var(--surface-muted)]">
+        {/* Poster — 2:3 portrait */}
+        <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "2/3" }}>
           {movie.poster && !imgError ? (
-            <Image src={movie.poster} alt={movie.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 15vw"
-              className="object-cover" onError={() => setImgError(true)} loading="lazy" />
+            <Image
+              src={movie.poster} alt={movie.title} fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+              onError={() => setImgError(true)} loading="lazy"
+            />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-[color:var(--muted)]">{movie.title}</div>
+            <div className="absolute inset-0 flex items-center justify-center p-3 text-center text-xs text-[color:var(--muted)]">{movie.title}</div>
           )}
 
-          {/* Hover overlay */}
-          <div className="absolute inset-0 hidden flex-col justify-end bg-gradient-to-t from-[rgba(29,42,36,0.92)] via-[rgba(29,42,36,0.18)] to-transparent p-2.5 opacity-0 transition-opacity duration-300 group-hover:opacity-100 sm:flex">
-            {movie.overview && <p className="line-clamp-4 text-xs text-stone-100">{movie.overview}</p>}
+          {/* Hover overlay — popis */}
+          <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-[rgba(27,24,18,0.88)] via-[rgba(27,24,18,0.1)] to-transparent p-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            {movie.overview && <p className="line-clamp-5 text-[11px] leading-relaxed text-white/90">{movie.overview}</p>}
           </div>
 
           {/* ONLINE badge */}
           {isOnline && (
             <div className="absolute bottom-2 left-2">
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-bold leading-none text-white shadow-md">
-                ● ONLINE{bestQuality ? ` · ${bestQuality}` : ""}
-              </span>
-            </div>
-          )}
-
-          {/* Scene source badge */}
-          {sceneSource && (
-            <div className="absolute top-2 right-2">
-              <span className={`${SOURCE_COLORS[sceneSource] ?? "bg-zinc-700"} text-[10px] font-bold px-1.5 py-0.5 rounded text-white leading-none`}>
-                {sceneSource.toUpperCase()}
+              <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
+                ● {bestQuality ?? "ONLINE"}
               </span>
             </div>
           )}
         </div>
 
         {/* Info */}
-        <div className="space-y-1 p-2.5 sm:space-y-0.5">
-          <h3 className="line-clamp-2 text-sm font-semibold leading-tight text-[color:var(--foreground)] sm:text-xs">{movie.title}</h3>
-          {movie.czech_title && (
-            <p className="line-clamp-1 text-xs text-[color:var(--muted)]">{movie.czech_title}</p>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
-              <span className="flex items-center gap-0.5"><Calendar className="w-2.5 h-2.5" />{movie.year}</span>
-              {movie.runtime > 0 && <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{movie.runtime} min</span>}
-            </div>
+        <div className="flex flex-col gap-1 px-3 py-2.5">
+          <h3
+            className="line-clamp-2 text-[0.8125rem] font-medium leading-snug text-[color:var(--foreground)] transition-colors group-hover:text-[color:var(--accent)]"
+            style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+          >
+            {movie.czech_title ?? movie.title}
+          </h3>
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-[color:var(--muted)]">
+            <span>{movie.year}</span>
+            {genre && <><span className="opacity-40">·</span><span className="truncate">{genre}</span></>}
             {movie.ratings.imdb && (
-              <span className="flex items-center gap-0.5">
-                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-yellow-400">{movie.ratings.imdb}</span>
+              <span className="ml-auto flex items-center gap-0.5 text-yellow-500">
+                <Star className="h-2.5 w-2.5 fill-yellow-500" />
+                {movie.ratings.imdb}
               </span>
             )}
           </div>

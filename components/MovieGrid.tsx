@@ -138,24 +138,29 @@ export default function MovieGrid() {
 
   return (
     <div>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-[color:var(--foreground)]">
-          <Sparkles className="h-5 w-5 text-[color:var(--accent)]" />
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2
+          className="text-[1.1rem] font-semibold text-[color:var(--foreground)]"
+          style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+        >
           Nové filmy
-          {movies.length > 0 && <span className="text-sm font-normal text-[color:var(--muted)]">{movies.length} titulů</span>}
+          {movies.length > 0 && (
+            <span className="ml-2 text-[0.85rem] font-normal text-[color:var(--muted)]">{movies.length} titulů</span>
+          )}
         </h2>
         <button
           onClick={() => void refresh()}
           disabled={loading}
-          className="min-h-11 w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50 sm:w-auto"
+          className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-[11px] font-medium text-[color:var(--muted)] transition-colors hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
         >
+          <Sparkles className="h-3 w-3 text-[color:var(--accent)]" />
           Aktualizovat
         </button>
       </div>
 
-      {error && <div className="text-center py-12 text-red-400">{error}</div>}
+      {error && <div className="py-12 text-center text-red-400">{error}</div>}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         {movies.map(movie => <MovieCard key={`${movie.id}-${movie.imdb_code}`} movie={movie} />)}
         {loading && Array.from({ length: 14 }).map((_, i) => (
           <div key={`sk-${i}`} className="aspect-[2/3] animate-pulse overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)]" />
