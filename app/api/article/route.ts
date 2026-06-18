@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
+import { hasGoogleTranslateKey, translateTexts } from "@/lib/googleTranslate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 function extractReadableContent(html: string): { content: string; image: string | null; author: string | null } {
   // Remove scripts, styles, nav, header, footer, aside
-  let clean = html
+  const clean = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<nav[\s\S]*?<\/nav>/gi, "")
@@ -79,12 +80,33 @@ async function fetchArticle(url: string) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const html = await res.text();
-  return extractReadableContent(html);
+  const article = extractReadableContent(html);
+  if (!article.content || !hasGoogleTranslateKey()) {
+    return article;
+  }
+
+  const paragraphs = article.content
+    .split("\n\n")
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .slice(0, 30);
+
+  if (paragraphs.length === 0) return article;
+
+  try {
+    const translated = await translateTexts(paragraphs);
+    return {
+      ...article,
+      content: translated.join("\n\n"),
+    };
+  } catch {
+    return article;
+  }
 }
 
 const getCachedArticle = unstable_cache(
   async (url: string) => fetchArticle(url),
-  ["article-content-v1"],
+  ["article-content-v2"],
   { revalidate: 3600 }
 );
 

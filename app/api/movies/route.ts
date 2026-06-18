@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { fetchSrrdb, fetchPredb, fetchScnsrcScene } from "@/lib/sceneSources";
-import Anthropic from "@anthropic-ai/sdk";
 import { unstable_cache } from "next/cache";
+import { hasGoogleTranslateKey, translateText } from "@/lib/googleTranslate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 const getKeys = () => ({
   tmdb: process.env.TMDB_API_KEY,
   omdb: process.env.OMDB_API_KEY,
-  anthropic: process.env.MOVIE_ANTHROPIC_KEY,
 });
 
 const MOVIES_PAGE_LIMIT = 50;
@@ -106,7 +105,13 @@ async function getTMDBDetailEN(tmdbId: number): Promise<string> {
   } catch { return ""; }
 }
 
-// Translate or generate Czech overview via Claude
+function buildGeneratedOverview(title: string, genres: string[], director: string | null) {
+  const genrePart = genres.length > 0 ? ` ${genres.slice(0, 3).join(", ").toLowerCase()}` : "";
+  const directorPart = director ? ` od režiséra ${director}` : "";
+  return `Film ${title}${directorPart}${genrePart ? ` kombinuje prvky žánru ${genrePart}` : ""}. Přehled vychází z dostupných databázových informací a bude zpřesněn, jakmile se objeví plný oficiální popis.`;
+}
+
+// Translate or generate Czech overview via Google Cloud Translate
 async function getCzechOverview(
   tmdbId: number, csOverview: string, title: string,
   genres: string[], director: string | null
@@ -115,32 +120,20 @@ async function getCzechOverview(
   if (csOverview && csOverview.length > 30) return csOverview;
 
   const enOverview = await getTMDBDetailEN(tmdbId);
-
-  const key = getKeys().anthropic;
-  if (!hasConfiguredKey(key)) return enOverview || "";
-
   try {
-    const client = new Anthropic({ apiKey: key });
-
     if (enOverview && enOverview.length > 20) {
-      // Translate English overview to Czech
-      const msg = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
-        messages: [{ role: "user", content: `Přelož tento popis filmu "${title}" do češtiny. Zachovej filmový jazyk, piš přirozenou a idiomatickou češtinou se správnou diakritikou, max 4 věty. Vrať POUZE přeložený text:\n\n${enOverview}` }],
-      });
-      const translated = msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
+      const translated = hasGoogleTranslateKey()
+        ? await translateText(enOverview, { source: "en", target: "cs" })
+        : enOverview;
       if (translated.length > 20) return translated;
     }
+  } catch {}
 
-    // No overview anywhere — generate from metadata
-    const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 200,
-      messages: [{ role: "user", content: `Napiš stručný popis (2-3 věty) pro film "${title}"${director ? ` od režiséra ${director}` : ""}${genres.length ? `, žánr: ${genres.join(", ")}` : ""}. Piš přirozenou češtinou, se správnou diakritikou a filmovým stylem. Vrať POUZE popis.` }],
-    });
-    return msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
-  } catch { return enOverview || ""; }
+  if (genres.length > 0 || director) {
+    return buildGeneratedOverview(title, genres, director);
+  }
+
+  return enOverview || "";
 }
 
 async function fetchOMDB(imdbId: string) {
@@ -209,7 +202,7 @@ const getCachedOverview = unstable_cache(
     genres: string[],
     director: string | null
   ) => getCzechOverview(tmdbId, csOverview, title, genres, director),
-  ["movie-overview-v1"],
+  ["movie-overview-v2"],
   { revalidate: 86400 }
 );
 

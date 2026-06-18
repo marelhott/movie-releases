@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
 import { unstable_cache } from "next/cache";
-import Anthropic from "@anthropic-ai/sdk";
-import { jsonrepair } from "jsonrepair";
+import { hasGoogleTranslateKey, translateTexts } from "@/lib/googleTranslate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -66,7 +65,10 @@ function decodeEntities(str: string): string {
   return str
     .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
-    .replace(/&hellip;/g, "...").replace(/<[^>]+>/g, "").trim();
+    .replace(/&hellip;/g, "...")
+    .replace(/<[^>]+>/g, "")
+    .replace(/<[^>]*$/g, "")
+    .trim();
 }
 
 function extractImage(item: any): string | null {
@@ -101,9 +103,8 @@ async function fetchRss(source: FeedSource, limit = 8, fresh = false): Promise<F
 
     return items.slice(0, limit).map((item: any) => {
       const title = decodeEntities(String(item.title?.["#text"] ?? item.title ?? ""));
-      const summary = decodeEntities(
-        String(item["content:encoded"] ?? item.content?.["#text"] ?? item.content ?? item.description ?? "").slice(0, 400)
-      );
+      const rawSummary = String(item["content:encoded"] ?? item.content?.["#text"] ?? item.content ?? item.description ?? "");
+      const summary = decodeEntities(rawSummary).slice(0, 400);
       const link = item.link?.["@_href"] ?? item.link?.["#text"] ?? item.link ?? source.siteUrl;
       const pubDate = item.pubDate ?? item.updated ?? item.published ?? null;
       return {
@@ -253,74 +254,24 @@ function rankArticles(articles: FeedArticle[]): FeedArticle[] {
     .sort((a, b) => b.score - a.score);
 }
 
-// ── Translation via Gemini (primary) + Claude fallback ───────────────────────
-
-async function translateWithGemini(articles: { title: string; summary: string }[]): Promise<{ title_cs: string; summary_cs: string }[]> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || articles.length === 0) throw new Error("no key");
-
-  const prompt = `Přelož titulky a perexe těchto zpráv do češtiny. Piš přirozenou novinářskou češtinou se správnou diakritikou.
-Vrať POUZE JSON pole ve formátu:
-[{"title_cs":"...","summary_cs":"..."}]
-
-Zprávy:
-${JSON.stringify(articles)}`;
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${key}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      signal: AbortSignal.timeout(12000),
-    }
-  );
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const data = await res.json();
-  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-  const match = raw.match(/\[[\s\S]*\]/);
-  const jsonStr = match ? match[0] : "[]";
-  let parsed: { title_cs: string; summary_cs: string }[] = [];
-  try { parsed = JSON.parse(jsonStr); }
-  catch { try { parsed = JSON.parse(jsonrepair(jsonStr)); } catch {} }
-  return parsed;
-}
-
 async function translateBatch(articles: FeedArticle[]): Promise<FeedArticle[]> {
-  if (articles.length === 0) return articles;
-  const slice = articles.slice(0, 30);
-  const input = slice.map(a => ({ title: a.title, summary: a.summary || "" }));
-
-  let translations: { title_cs: string; summary_cs: string }[] = [];
-
-  // Primary: Gemini
   try {
-    translations = await translateWithGemini(input);
-  } catch {
-    // Fallback: Claude + jsonrepair
-    const claudeKey = process.env.MOVIE_ANTHROPIC_KEY;
-    if (claudeKey) {
-      try {
-        const client = new Anthropic({ apiKey: claudeKey });
-        const msg = await client.messages.create({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 2500,
-          messages: [{ role: "user", content: `Přelož do češtiny. Vrať POUZE JSON pole:\n[{"title_cs":"...","summary_cs":"..."}]\n\n${JSON.stringify(input)}` }],
-        });
-        const raw = msg.content[0].type === "text" ? msg.content[0].text : "[]";
-        const match = raw.match(/\[[\s\S]*\]/);
-        const jsonStr = match ? match[0] : "[]";
-        try { translations = JSON.parse(jsonStr); }
-        catch { try { translations = JSON.parse(jsonrepair(jsonStr)); } catch {} }
-      } catch {}
-    }
-  }
+    if (articles.length === 0 || !hasGoogleTranslateKey()) return articles;
+    const titleInput = articles.map((article) => article.title);
+    const summaryInput = articles.map((article) => article.summary || "");
+    const [titleTranslations, summaryTranslations] = await Promise.all([
+      translateTexts(titleInput),
+      translateTexts(summaryInput),
+    ]);
 
-  return articles.map((a, i) => ({
-    ...a,
-    title_cs: translations[i]?.title_cs?.trim() || a.title,
-    summary_cs: translations[i]?.summary_cs?.trim() || a.summary,
-  }));
+    return articles.map((article, index) => ({
+      ...article,
+      title_cs: titleTranslations[index]?.trim() || article.title,
+      summary_cs: summaryTranslations[index]?.trim() || article.summary,
+    }));
+  } catch {
+    return articles;
+  }
 }
 
 // ── Build feed pipeline ───────────────────────────────────────────────────────
@@ -351,7 +302,7 @@ async function buildFeed(category: "ai" | "tech", fresh = false): Promise<FeedAr
 
 export const getCachedFeed = unstable_cache(
   async (category: "ai" | "tech") => buildFeed(category),
-  ["feed-category-v5"],
+  ["feed-category-v6"],
   { revalidate: 1200 }
 );
 

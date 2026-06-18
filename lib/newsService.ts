@@ -1,15 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { XMLParser } from "fast-xml-parser";
 import { unstable_cache } from "next/cache";
-import { jsonrepair } from "jsonrepair";
+import { hasGoogleTranslateKey, translateTexts } from "@/lib/googleTranslate";
 
 const RSS_ITEMS_PER_SOURCE = 18;
 const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 30;
 const RAW_NEWS_LIMIT = 120;
-const CLAUDE_BATCH_SIZE = 10;
+const TRANSLATION_BATCH_SIZE = 10;
 const OG_IMAGE_ENRICH_LIMIT = 40;
-const ANTHROPIC_TRANSLATION_MODEL = "claude-sonnet-4-20250514";
 const ALLOWED_PERSON_DEPARTMENTS = new Set(["Acting", "Directing"]);
 const MAX_ARTICLE_AGE_DAYS = 21;
 
@@ -164,7 +162,6 @@ const parser = new XMLParser({
 function getKeys() {
   return {
     tmdb: process.env.TMDB_API_KEY,
-    anthropic: process.env.MOVIE_ANTHROPIC_KEY,
   };
 }
 
@@ -713,6 +710,17 @@ function buildLocalArticle(cluster: ClusteredArticle): NewsArticle {
   };
 }
 
+function pickPersonHint(cluster: ClusteredArticle) {
+  const hints = [
+    ...cluster.lead.entityHints,
+    ...cluster.related.flatMap((story) => story.entityHints),
+  ];
+
+  return Array.from(new Set(hints))
+    .filter((hint) => hint.split(/\s+/).length >= 2)
+    .find((hint) => !/Toy Story|Box Office|Karlovy Vary|MovieZone|Screen Daily/i.test(hint)) ?? null;
+}
+
 async function findPersonByName(name: string, tmdbKey: string): Promise<PersonSnippet | null> {
   try {
     const searchRes = await fetch(
@@ -767,68 +775,31 @@ const getCachedPersonByName = unstable_cache(
   { revalidate: 86400 }
 );
 
-async function translateClusterBatch(clusters: ClusteredArticle[], client: Anthropic, tmdbKey: string) {
-  const payload = clusters.map((cluster, index) => ({
-    i: index,
-    title: cluster.lead.title,
-    text: cluster.lead.fullText || cluster.lead.description,
-    source: cluster.lead.source,
-    category: cluster.category,
-    related_sources: cluster.sources,
-    related_headlines: cluster.relatedTitles,
-  }));
-
-  const prompt = `Jsi šéfredaktor českého filmového feedu. Z anglických článků vytváříš přesné, stručné a čtivé české highlights.
-
-Pravidla:
-- piš spisovnou, přirozenou češtinou se správnou diakritikou
-- nepřekládej doslova a nepoužívej kostrbaté vazby
-- drž se faktů z textu, nic si nevymýšlej
-- pokud jde o trailer nebo recenzi, udělej text věcný a stručný
-- pokud zprávu pokrývá více zdrojů, můžeš to jemně odrazit formulací, ale nevymýšlej nové informace
-- žádné HTML entity, žádný markdown
-
-Vrať POUZE validní JSON pole objektů s klíči:
-- "i": index
-- "title_cs": český nadpis, max 11 slov
-- "body_cs": 2-3 věty v přirozené češtině
-- "person_name": celé jméno hlavního herce nebo režiséra v angličtině, jinak null
-
-${JSON.stringify(payload)}`;
-
-  const msg = await client.messages.create({
-    model: ANTHROPIC_TRANSLATION_MODEL,
-    max_tokens: 3200,
-    temperature: 0,
-    messages: [{ role: "user", content: prompt }],
+async function translateClusterBatch(clusters: ClusteredArticle[], tmdbKey?: string) {
+  const titleInput = clusters.map((cluster) => cluster.lead.title);
+  const bodyInput = clusters.map((cluster) => {
+    const sourceText = cluster.lead.fullText || cluster.lead.description || buildFallbackBody(cluster);
+    return sourceText.slice(0, 900);
   });
-  const raw = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const cleaned = raw.replace(/```(?:json)?\n?/g, "").trim();
-  const match = cleaned.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("Missing JSON array");
-  let parsedJson: string = match[0];
-  try { JSON.parse(parsedJson); } catch { parsedJson = jsonrepair(parsedJson); }
-  const generated = JSON.parse(parsedJson) as Array<{
-    i: number;
-    title_cs?: string;
-    body_cs?: string;
-    person_name?: string | null;
-  }>;
 
-  const byIndex = new Map(generated.map((entry) => [entry.i, entry]));
-  const personResults = await Promise.all(
-    clusters.map((cluster, index) => {
-      const personName = byIndex.get(index)?.person_name;
-      return personName ? getCachedPersonByName(personName, tmdbKey) : Promise.resolve(null);
-    })
-  );
+  const [translatedTitles, translatedBodies, personResults] = await Promise.all([
+    translateTexts(titleInput),
+    translateTexts(bodyInput),
+    tmdbKey
+      ? Promise.all(
+          clusters.map((cluster) => {
+            const personName = pickPersonHint(cluster);
+            return personName ? getCachedPersonByName(personName, tmdbKey) : Promise.resolve(null);
+          })
+        )
+      : Promise.resolve(clusters.map(() => null)),
+  ]);
 
   return clusters.map((cluster, index): NewsArticle => {
-    const generatedArticle = byIndex.get(index);
     return {
-      title_cs: normalizeCzechText(decodeHtmlEntities(generatedArticle?.title_cs?.trim() || cluster.lead.title)),
+      title_cs: normalizeCzechText(decodeHtmlEntities(translatedTitles[index]?.trim() || cluster.lead.title)),
       body_cs: decorateBodyWithClusterContext(
-        normalizeCzechText(decodeHtmlEntities(generatedArticle?.body_cs?.trim() || buildFallbackBody(cluster))),
+        normalizeCzechText(decodeHtmlEntities(translatedBodies[index]?.trim() || buildFallbackBody(cluster))),
         cluster
       ),
       title_en: cluster.lead.title,
@@ -849,20 +820,19 @@ ${JSON.stringify(payload)}`;
 }
 
 async function generateClusterBatch(clusters: ClusteredArticle[]) {
-  const { anthropic, tmdb } = getKeys();
-  if (!(anthropic && tmdb)) {
+  const { tmdb } = getKeys();
+  if (!hasGoogleTranslateKey()) {
     return clusters.map((cluster) => buildLocalArticle(cluster));
   }
 
   try {
-    const client = new Anthropic({ apiKey: anthropic });
     const englishClusters = clusters.filter((cluster) => cluster.lang !== "cs");
 
     if (englishClusters.length === 0) {
       return clusters.map((cluster) => buildLocalArticle(cluster));
     }
 
-    const translated = await translateClusterBatch(englishClusters, client, tmdb);
+    const translated = await translateClusterBatch(englishClusters, tmdb);
     const translatedByLink = new Map(translated.map((article) => [article.link, article]));
 
     return clusters.map((cluster) =>
@@ -880,7 +850,7 @@ const getCachedClusterBatch = unstable_cache(
     const clusters = JSON.parse(payload) as ClusteredArticle[];
     return generateClusterBatch(clusters);
   },
-  ["news-cluster-batch-v1"],
+  ["news-cluster-batch-v2"],
   { revalidate: 604800 }
 );
 
@@ -919,8 +889,8 @@ async function buildNewsPage(page: number, pageSize: number, forceRefresh: boole
   const hasMore = start + pageSize < clustered.length;
 
   const batches: ClusteredArticle[][] = [];
-  for (let index = 0; index < pageItems.length; index += CLAUDE_BATCH_SIZE) {
-    batches.push(pageItems.slice(index, index + CLAUDE_BATCH_SIZE));
+  for (let index = 0; index < pageItems.length; index += TRANSLATION_BATCH_SIZE) {
+    batches.push(pageItems.slice(index, index + TRANSLATION_BATCH_SIZE));
   }
 
   const translated = await Promise.all(
@@ -939,7 +909,7 @@ async function buildNewsPage(page: number, pageSize: number, forceRefresh: boole
 
 export const getCachedNewsPage = unstable_cache(
   async (page: number, pageSize: number) => buildNewsPage(page, pageSize, false),
-  ["news-page-v8"],
+  ["news-page-v9"],
   { revalidate: 900 }
 );
 
