@@ -6,7 +6,8 @@ import { Movie } from "@/types/movie";
 import MovieCard from "./MovieCard";
 
 type MovieCache = {
-  movies: Movie[];
+  vod: Movie[];
+  upcoming: Movie[];
   page: number;
   hasMore: boolean;
   hydrated: boolean;
@@ -14,10 +15,11 @@ type MovieCache = {
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const STORAGE_KEY = "movie-releases:movies-cache:v2";
+const STORAGE_KEY = "movie-releases:movies-cache:v3";
 
 const movieCache: MovieCache = {
-  movies: [],
+  vod: [],
+  upcoming: [],
   page: 1,
   hasMore: true,
   hydrated: false,
@@ -25,7 +27,8 @@ const movieCache: MovieCache = {
 };
 
 export default function MovieGrid() {
-  const [movies, setMovies] = useState<Movie[]>(movieCache.movies);
+  const [vod, setVod] = useState<Movie[]>(movieCache.vod);
+  const [upcoming, setUpcoming] = useState<Movie[]>(movieCache.upcoming);
   const [page, setPage] = useState(movieCache.page);
   const [loading, setLoading] = useState(!movieCache.hydrated);
   const [hasMore, setHasMore] = useState(movieCache.hasMore);
@@ -45,19 +48,23 @@ export default function MovieGrid() {
       });
       if (!res.ok) throw new Error("Chyba při načítání filmů");
       const data = await res.json();
-      if (!data.movies?.length) {
+      if (!data.vod?.length) {
         setHasMore(false);
         movieCache.hasMore = false;
       } else {
-        setMovies((prev) => {
-          const next = mode === "replace" ? data.movies : [...prev, ...data.movies];
-          movieCache.movies = next;
+        setVod((prev) => {
+          const next = mode === "replace" ? data.vod : [...prev, ...data.vod];
+          movieCache.vod = next;
           return next;
         });
+        if (p === 1) {
+          setUpcoming(data.upcoming ?? []);
+          movieCache.upcoming = data.upcoming ?? [];
+        }
         setPage(p);
-        setHasMore(true);
+        setHasMore(data.hasMore ?? true);
         movieCache.page = p;
-        movieCache.hasMore = true;
+        movieCache.hasMore = data.hasMore ?? true;
       }
       movieCache.hydrated = true;
       movieCache.fetchedAt = Date.now();
@@ -65,7 +72,8 @@ export default function MovieGrid() {
         window.localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
-            movies: movieCache.movies.slice(0, 30),
+            vod: movieCache.vod.slice(0, 30),
+            upcoming: movieCache.upcoming,
             page: Math.min(movieCache.page, 1),
             hasMore: true,
             hydrated: movieCache.hydrated,
@@ -85,13 +93,15 @@ export default function MovieGrid() {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as MovieCache;
-        if (Array.isArray(parsed.movies) && parsed.movies.length > 0) {
-          movieCache.movies = parsed.movies;
+        if (Array.isArray(parsed.vod) && parsed.vod.length > 0) {
+          movieCache.vod = parsed.vod;
+          movieCache.upcoming = parsed.upcoming ?? [];
           movieCache.page = parsed.page;
           movieCache.hasMore = parsed.hasMore;
           movieCache.hydrated = true;
           movieCache.fetchedAt = parsed.fetchedAt;
-          setMovies(parsed.movies);
+          setVod(parsed.vod);
+          setUpcoming(parsed.upcoming ?? []);
           setPage(parsed.page);
           setHasMore(parsed.hasMore);
           setLoading(false);
@@ -128,12 +138,14 @@ export default function MovieGrid() {
     movieCache.hydrated = false;
     movieCache.page = 1;
     movieCache.hasMore = true;
-    movieCache.movies = [];
+    movieCache.vod = [];
+    movieCache.upcoming = [];
     movieCache.fetchedAt = 0;
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {}
-    setMovies([]);
+    setVod([]);
+    setUpcoming([]);
     setPage(1);
     setHasMore(true);
     void loadMovies(1, "replace", { forceRefresh: true });
@@ -141,14 +153,15 @@ export default function MovieGrid() {
 
   return (
     <div>
+      {/* Online section */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2
           className="text-[1.1rem] font-semibold text-[color:var(--foreground)]"
           style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
         >
-          Nové filmy
-          {movies.length > 0 && (
-            <span className="ml-2 text-[0.85rem] font-normal text-[color:var(--muted)]">{movies.length} titulů</span>
+          Online
+          {vod.length > 0 && (
+            <span className="ml-2 text-[0.85rem] font-normal text-[color:var(--muted)]">{vod.length} titulů</span>
           )}
         </h2>
         <button
@@ -174,13 +187,13 @@ export default function MovieGrid() {
       )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-        {movies.map(movie => <MovieCard key={`${movie.id}-${movie.imdb_code}`} movie={movie} />)}
+        {vod.map(movie => <MovieCard key={`${movie.id}-${movie.imdb_code}`} movie={movie} />)}
         {loading && Array.from({ length: 14 }).map((_, i) => (
           <div key={`sk-${i}`} className="aspect-[2/3] animate-pulse overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)]" />
         ))}
       </div>
 
-      {!loading && hasMore && movies.length > 0 && (
+      {!loading && hasMore && vod.length > 0 && (
         <div className="flex justify-center mt-10">
           <button onClick={() => { const n = page + 1; void loadMovies(n, "append"); }}
             className="min-h-11 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-8 py-3 font-medium text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--surface-muted)]">
@@ -189,9 +202,30 @@ export default function MovieGrid() {
         </div>
       )}
 
-      {loading && movies.length > 0 && (
+      {loading && vod.length > 0 && (
         <div className="flex justify-center mt-8">
           <Loader2 className="w-6 h-6 animate-spin text-[color:var(--muted)]" />
+        </div>
+      )}
+
+      {/* Připravuje se section */}
+      {upcoming.length > 0 && (
+        <div className="mt-12">
+          <h2
+            className="mb-4 text-[1.1rem] font-semibold text-[color:var(--foreground)]"
+            style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
+          >
+            Připravuje se
+          </h2>
+          <div className="-mx-4 overflow-x-auto px-4 sm:-mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-4 pb-2">
+              {upcoming.map(movie => (
+                <div key={`${movie.id}-${movie.imdb_code}`} className="w-36 flex-shrink-0">
+                  <MovieCard movie={movie} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -131,6 +131,13 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
                 <p className="mt-4 text-sm italic text-[color:var(--muted)]">Popis není k dispozici.</p>
               )}
 
+              {/* No release notice */}
+              {movie.torrents?.length === 0 && (movie.releases?.length ?? 0) === 0 && (
+                <p className="mt-4 text-sm italic text-[color:var(--muted)]">
+                  Zatím bez releasu — hlídáme YTS a scénu.
+                </p>
+              )}
+
               {/* Director */}
               {movie.director && (
                 <div className="mt-5">

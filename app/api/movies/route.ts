@@ -394,15 +394,28 @@ const getCachedMoviesPage = unstable_cache(
   async (page: number) => {
     return buildMoviesPage(page, false);
   },
-  ["movies-page-v5"],
+  ["movies-page-v6"],
   { revalidate: 1800 }
 );
 
+const DOWNLOAD_SOURCES = new Set(["yts", "srrdb", "predb", "scnsrc"]);
+
+function hasDownloadRelease(movie: any): boolean {
+  return (movie.sources ?? []).some((s: string) => DOWNLOAD_SOURCES.has(s));
+}
+
+function sceneReleaseTimestamp(movie: any): number {
+  const dates = (movie.releases ?? [])
+    .filter((r: any) => DOWNLOAD_SOURCES.has(r.source))
+    .map((r: any) => getTimestamp(r.date))
+    .filter((t: number) => t > 0);
+  return dates.length > 0 ? Math.max(...dates) : 0;
+}
+
 async function buildMoviesPage(page: number, forceFresh: boolean) {
-    const [yts, nowPlaying, upcoming, srrdb, predb, scnsrc] =
+    const [yts, upcoming, srrdb, predb, scnsrc] =
       await Promise.all([
         fetchYTS(page, forceFresh),
-        page === 1 ? fetchTMDBSection("movie/now_playing", forceFresh) : Promise.resolve([]),
         page === 1 ? fetchTMDBSection("movie/upcoming", forceFresh) : Promise.resolve([]),
         page === 1 ? fetchSrrdb() : Promise.resolve([]),
         page === 1 ? fetchPredb() : Promise.resolve([]),
@@ -422,7 +435,6 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
 
     const dedupedRaw = deduplicateRawEntries([
       ...yts,
-      ...nowPlaying,
       ...upcoming,
       ...sceneEntries,
     ]);
@@ -434,37 +446,31 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
       if (normalised.length >= NORMALIZE_TARGET_COUNT) break;
     }
 
-    const SCENE_SOURCES = new Set(["yts", "srrdb", "predb", "scnsrc"]);
+    const deduped = deduplicate(normalised).filter(m => m.poster);
 
-    function hasSceneRelease(movie: any): boolean {
-      return (movie.sources ?? []).some((s: string) => SCENE_SOURCES.has(s));
-    }
-
-    function sceneReleaseTimestamp(movie: any): number {
-      const dates = (movie.releases ?? [])
-        .filter((r: any) => SCENE_SOURCES.has(r.source))
-        .map((r: any) => getTimestamp(r.date))
-        .filter((t: number) => t > 0);
-      return dates.length > 0 ? Math.max(...dates) : 0;
-    }
-
-    const movies = deduplicate(normalised)
-      .sort((left, right) => {
-        const leftScene = hasSceneRelease(left);
-        const rightScene = hasSceneRelease(right);
-        if (leftScene !== rightScene) return leftScene ? -1 : 1;
-        if (leftScene && rightScene) {
-          const bySceneDate = sceneReleaseTimestamp(right) - sceneReleaseTimestamp(left);
-          if (bySceneDate !== 0) return bySceneDate;
-        }
-        const byDate = getTimestamp(right.date_added) - getTimestamp(left.date_added);
-        if (byDate !== 0) return byDate;
-        return Number(right.year ?? 0) - Number(left.year ?? 0);
+    const vod = deduped
+      .filter(hasDownloadRelease)
+      .sort((a, b) => {
+        const bySceneDate = sceneReleaseTimestamp(b) - sceneReleaseTimestamp(a);
+        if (bySceneDate !== 0) return bySceneDate;
+        return getTimestamp(b.date_added) - getTimestamp(a.date_added);
       })
-      .filter(m => m.poster)
       .slice(0, MOVIES_PAGE_LIMIT);
 
-    return { movies, page, refreshedAt: forceFresh ? Date.now() : undefined };
+    const upcomingMovies = page === 1
+      ? deduped
+          .filter(m => !hasDownloadRelease(m))
+          .sort((a, b) => getTimestamp(b.date_added) - getTimestamp(a.date_added))
+          .slice(0, 30)
+      : [];
+
+    return {
+      vod,
+      upcoming: upcomingMovies,
+      page,
+      hasMore: vod.length >= MOVIES_PAGE_LIMIT,
+      refreshedAt: forceFresh ? Date.now() : undefined,
+    };
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
