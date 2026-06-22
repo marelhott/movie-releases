@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useEffectEvent } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { Movie } from "@/types/movie";
 import MovieCard from "./MovieCard";
 
@@ -31,7 +31,7 @@ export default function MovieGrid() {
   const [hasMore, setHasMore] = useState(movieCache.hasMore);
   const [error, setError] = useState<string | null>(null);
 
-  const loadMovies = useEffectEvent(async (
+  const loadMovies = useCallback(async (
     p: number,
     mode: "replace" | "append" = "replace",
     options?: { forceRefresh?: boolean }
@@ -65,9 +65,9 @@ export default function MovieGrid() {
         window.localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
-            movies: movieCache.movies,
-            page: movieCache.page,
-            hasMore: movieCache.hasMore,
+            movies: movieCache.movies.slice(0, 30),
+            page: Math.min(movieCache.page, 1),
+            hasMore: true,
             hydrated: movieCache.hydrated,
             fetchedAt: movieCache.fetchedAt,
           } satisfies MovieCache)
@@ -78,7 +78,7 @@ export default function MovieGrid() {
     } finally {
       setLoading(false);
     }
-  });
+  }, []);
 
   useEffect(() => {
     try {
@@ -124,7 +124,7 @@ export default function MovieGrid() {
     };
   }, [loadMovies]);
 
-  const refresh = useEffectEvent(async () => {
+  const refresh = useCallback(async () => {
     movieCache.hydrated = false;
     movieCache.page = 1;
     movieCache.hasMore = true;
@@ -137,7 +137,7 @@ export default function MovieGrid() {
     setPage(1);
     setHasMore(true);
     void loadMovies(1, "replace", { forceRefresh: true });
-  });
+  }, [loadMovies]);
 
   return (
     <div>
@@ -161,7 +161,17 @@ export default function MovieGrid() {
         </button>
       </div>
 
-      {error && <div className="py-12 text-center text-red-400">{error}</div>}
+      {error && (
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <p className="text-sm text-[color:var(--muted)]">{error}</p>
+          <button
+            onClick={() => void refresh()}
+            className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-sm text-[color:var(--foreground)] hover:bg-[color:var(--surface-muted)]"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Zkusit znovu
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         {movies.map(movie => <MovieCard key={`${movie.id}-${movie.imdb_code}`} movie={movie} />)}

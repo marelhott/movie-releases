@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { lockScroll, unlockScroll } from "@/lib/scrollLock";
 import Image from "next/image";
 import { X, Clock, Calendar, ExternalLink, Film } from "lucide-react";
 import { Movie, CastMember, MovieRelease } from "@/types/movie";
@@ -10,21 +11,6 @@ const SOURCE_LABELS: Record<string, string> = {
   yts: "YTS", tmdb: "TMDB", srrdb: "SRRDB", predb: "PreDB",
   scnsrc: "ScnSrc", letterboxd: "Letterboxd",
 };
-
-function formatReleaseDate(value: string | null) {
-  if (!value) return null;
-  try {
-    return new Date(value).toLocaleString("cs-CZ", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return value;
-  }
-}
 
 function ReleaseCard({ release }: { release: MovieRelease }) {
   const badge = SOURCE_LABELS[release.source] ?? release.source.toUpperCase();
@@ -77,8 +63,8 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => e.key === "Escape" && !personId && onClose();
     window.addEventListener("keydown", handler);
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", handler); document.body.style.overflow = ""; };
+    lockScroll();
+    return () => { window.removeEventListener("keydown", handler); unlockScroll(); };
   }, [onClose, personId]);
 
   const { ratings } = movie;
@@ -91,7 +77,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
           {/* Backdrop */}
           {movie.backdrop && (
             <div className="relative h-36 w-full overflow-hidden rounded-t-[1.75rem] sm:h-48 sm:rounded-t-2xl">
-              <Image src={movie.backdrop} alt="" fill className="object-cover opacity-60" />
+              <Image src={movie.backdrop} alt="" fill className="object-cover opacity-60" sizes="100vw" />
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[color:var(--surface)]" />
             </div>
           )}
@@ -105,7 +91,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
             <div className="w-24 flex-shrink-0 self-center sm:block sm:w-32 sm:self-auto">
               <div className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-xl ring-2 ring-white/10">
                 {movie.poster ? (
-                  <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
+                  <Image src={movie.poster} alt={movie.title} fill className="object-cover" sizes="(max-width: 640px) 96px, 128px" />
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--surface-muted)] p-2 text-center text-xs text-[color:var(--muted)]">{movie.title}</div>
                 )}

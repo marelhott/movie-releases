@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { NextResponse } from "next/server";
 import { getNewsPage, warmNewsCaches } from "@/lib/newsService";
 
-export const dynamic = "auto";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {

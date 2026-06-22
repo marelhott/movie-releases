@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
+import { lockScroll, unlockScroll } from "@/lib/scrollLock";
+import Image from "next/image";
 import { RefreshCw, Loader2, Film, X, ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -73,9 +75,9 @@ function PersonSnippet({
       }}
       className="group mt-3 flex w-full items-center gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[color:var(--surface-muted)] sm:gap-4 sm:px-5"
     >
-      <div className="h-20 w-16 flex-shrink-0 overflow-hidden rounded-2xl bg-[color:var(--surface-muted)] shadow-sm">
+      <div className="relative h-20 w-16 flex-shrink-0 overflow-hidden rounded-2xl bg-[color:var(--surface-muted)] shadow-sm">
         {person.photo ? (
-          <img src={person.photo} alt={person.name} className="h-full w-full object-cover" />
+          <Image src={person.photo} alt={person.name} fill className="object-cover" sizes="64px" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[color:var(--muted)]">
             <Film className="h-4 w-4" />
@@ -92,14 +94,16 @@ function PersonSnippet({
             {person.top_films.slice(0, 4).map((film, index) => (
               <div
                 key={`${film.title}-${index}`}
-                className="h-16 w-11 flex-shrink-0 overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] shadow-sm"
+                className="relative h-16 w-11 flex-shrink-0 overflow-hidden rounded-xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] shadow-sm"
                 title={`${film.title} (${film.year})`}
               >
                 {film.poster ? (
-                  <img
+                  <Image
                     src={film.poster}
                     alt={film.title}
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
+                    sizes="44px"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-xs text-[color:var(--muted)]">
@@ -125,10 +129,10 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
     };
 
     window.addEventListener("keydown", onKeyDown);
-    document.body.style.overflow = "hidden";
+    lockScroll();
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
+      unlockScroll();
     };
   }, [onClose, personId]);
 
@@ -147,8 +151,8 @@ function ArticleModal({ article, onClose }: { article: NewsArticle; onClose: () 
           </button>
 
           {article.image && (
-            <div className="h-44 w-full overflow-hidden rounded-t-[1.75rem] sm:h-56 sm:rounded-t-2xl">
-              <img src={article.image} alt="" className="h-full w-full object-cover" />
+            <div className="relative h-44 w-full overflow-hidden rounded-t-[1.75rem] sm:h-56 sm:rounded-t-2xl">
+              <Image src={article.image} alt="" fill className="object-cover" sizes="(max-width: 640px) 100vw, 672px" />
             </div>
           )}
 
@@ -188,11 +192,6 @@ const SOURCE_BADGE: Record<string, string> = {
   "Variety": "bg-orange-900/80 text-orange-300",
 };
 
-function SourcePill({ article }: { article: NewsArticle }) {
-  const badge = SOURCE_BADGE[article.source] ?? "bg-[rgba(255,253,248,0.88)] text-[color:var(--foreground)]";
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${badge}`}>{article.source}</span>;
-}
-
 
 function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => void }) {
   const [imgError, setImgError] = useState(false);
@@ -209,13 +208,12 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
         {/* Image — 16:9 ratio (menší) */}
         <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "16/9" }}>
           {hasImage ? (
-            <img
-              src={article.image}
+            <Image
+              src={article.image!}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-[1.04]"
+              fill
+              className="object-cover transition-transform duration-500 ease-in-out group-hover:scale-[1.04]"
               onError={() => setImgError(true)}
-              loading="lazy"
-              decoding="async"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
           ) : (
@@ -244,9 +242,9 @@ function NewsCard({ article, onClick }: { article: NewsArticle; onClick: () => v
               onClick={(e) => { e.stopPropagation(); setPersonId(article.person!.id); }}
             >
               {article.person.photo ? (
-                <img src={article.person.photo} alt={article.person.name}
-                  className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
-                  loading="lazy" decoding="async" />
+                <Image src={article.person.photo} alt={article.person.name}
+                  width={32} height={32}
+                  className="flex-shrink-0 rounded-full object-cover" />
               ) : (
                 <div className="h-8 w-8 flex-shrink-0 rounded-full bg-[color:var(--surface-muted)] flex items-center justify-center">
                   <Film className="h-3.5 w-3.5 text-[color:var(--faint)]" />
@@ -296,7 +294,7 @@ export default function NewsTab() {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const pendingPagesRef = useRef(new Set<number>());
 
-  const loadPage = useEffectEvent(async (
+  const loadPage = useCallback(async (
     nextPage: number,
     mode: "replace" | "append",
     options?: { forceRefresh?: boolean }
@@ -340,9 +338,9 @@ export default function NewsTab() {
         window.localStorage.setItem(
           STORAGE_KEY,
           JSON.stringify({
-            articles: newsCache.articles,
-            page: newsCache.page,
-            hasMore: newsCache.hasMore,
+            articles: newsCache.articles.slice(0, 30),
+            page: 0,
+            hasMore: true,
             hydrated: newsCache.hydrated,
             fetchedAt: newsCache.fetchedAt,
           } satisfies NewsCache)
@@ -361,7 +359,7 @@ export default function NewsTab() {
       setLoadingInitial(false);
       setLoadingMore(false);
     }
-  });
+  }, []);
 
   useEffect(() => {
     try {
@@ -407,7 +405,7 @@ export default function NewsTab() {
     };
   }, [loadPage]);
 
-  const refresh = useEffectEvent(async () => {
+  const refresh = useCallback(async () => {
     newsCache.articles = [];
     newsCache.page = 0;
     newsCache.hasMore = true;
@@ -420,12 +418,17 @@ export default function NewsTab() {
     setHasMore(true);
     setPage(0);
     void loadPage(1, "replace", { forceRefresh: true });
-  });
+  }, [loadPage]);
 
-  const loadNextPage = useEffectEvent(async () => {
+  // Ref holds latest pagination state so loadNextPage stays stable
+  const paginationRef = useRef({ hasMore, loadingInitial, loadingMore, page });
+  paginationRef.current = { hasMore, loadingInitial, loadingMore, page };
+
+  const loadNextPage = useCallback(() => {
+    const { hasMore, loadingInitial, loadingMore, page } = paginationRef.current;
     if (!hasMore || loadingInitial || loadingMore) return;
     void loadPage(page + 1, "append");
-  });
+  }, [loadPage]);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -434,7 +437,7 @@ export default function NewsTab() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          void loadNextPage();
+          loadNextPage();
         }
       },
       { rootMargin: "800px 0px" }
@@ -489,7 +492,17 @@ export default function NewsTab() {
         </div>
       )}
 
-      {error && <div className="py-12 text-center text-red-400">{error}</div>}
+      {error && (
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <p className="text-sm text-[color:var(--muted)]">{error}</p>
+          <button
+            onClick={() => void refresh()}
+            className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-sm text-[color:var(--foreground)] hover:bg-[color:var(--surface-muted)]"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Zkusit znovu
+          </button>
+        </div>
+      )}
 
       {loadingInitial && articles.length === 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

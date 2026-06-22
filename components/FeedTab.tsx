@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
+import { lockScroll, unlockScroll } from "@/lib/scrollLock";
+import Image from "next/image";
 import { Loader2, RefreshCw, X, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -62,8 +64,8 @@ function ArticleModal({ article, onClose }: { article: FeedArticle; onClose: () 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+    lockScroll();
+    return () => { window.removeEventListener("keydown", onKey); unlockScroll(); };
   }, [onClose]);
 
   useEffect(() => {
@@ -108,8 +110,8 @@ function ArticleModal({ article, onClose }: { article: FeedArticle; onClose: () 
 
         {/* Hero image */}
         {image && (
-          <div className="h-48 w-full flex-shrink-0 overflow-hidden sm:h-56">
-            <img src={image} alt="" className="h-full w-full object-cover" />
+          <div className="relative h-48 w-full flex-shrink-0 overflow-hidden sm:h-56">
+            <Image src={image} alt="" fill className="object-cover" sizes="(max-width: 640px) 100vw, 672px" />
           </div>
         )}
 
@@ -186,12 +188,13 @@ function FeedCard({ article, onClick }: { article: FeedArticle; onClick: () => v
       {/* 16:9 image */}
       <div className="relative w-full overflow-hidden bg-[color:var(--surface-muted)]" style={{ aspectRatio: "16/9" }}>
         {imgSrc && !imgError ? (
-          <img
+          <Image
             src={imgSrc}
             alt={title}
-            loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             onError={() => setImgError(true)}
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
           />
         ) : (
           /* Fallback: source logo centred on muted bg */
@@ -250,7 +253,7 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<FeedArticle | null>(null);
 
-  const load = useEffectEvent(async (forceRefresh = false) => {
+  const load = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -269,7 +272,7 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
     } finally {
       setLoading(false);
     }
-  });
+  }, [category]);
 
   useEffect(() => {
     try {
@@ -286,8 +289,9 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
       }
     } catch {}
 
-    if (cache.hydrated && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return;
-    void load();
+    if (!cache.hydrated || Date.now() - cache.fetchedAt >= CACHE_TTL_MS) {
+      void load();
+    }
 
     const interval = window.setInterval(() => {
       if (Date.now() - cache.fetchedAt < CACHE_TTL_MS) return;
@@ -307,12 +311,12 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
     };
   }, [load, category]);
 
-  const refresh = useEffectEvent(() => {
+  const refresh = useCallback(() => {
     cache.hydrated = false; cache.articles = []; cache.fetchedAt = 0;
     try { localStorage.removeItem(storageKey(category)); } catch {}
     setArticles([]);
     void load(true);
-  });
+  }, [load, category]);
 
   const heading = category === "ai" ? "Umělá inteligence" : "Technologie";
 
@@ -339,7 +343,17 @@ export default function FeedTab({ category }: { category: FeedCategory }) {
           </button>
         </div>
 
-        {error && <div className="py-12 text-center text-red-400">{error}</div>}
+        {error && (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-sm text-[color:var(--muted)]">{error}</p>
+            <button
+              onClick={refresh}
+              className="flex items-center gap-1.5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-sm text-[color:var(--foreground)] hover:bg-[color:var(--surface-muted)]"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Zkusit znovu
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {articles.map(article => (

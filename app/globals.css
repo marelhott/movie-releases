@@ -21,10 +21,25 @@
   --font-mono: ui-monospace, monospace;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141412;
+    --surface: #1c1b18;
+    --surface-muted: rgba(255, 253, 240, 0.06);
+    --foreground: rgb(238, 235, 224);
+    --muted: rgba(238, 235, 224, 0.58);
+    --faint: rgba(238, 235, 224, 0.35);
+    --line: rgba(255, 253, 240, 0.09);
+    --accent: #18c99a;
+    --accent-soft: #0c2d22;
+    color-scheme: dark;
+  }
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   background: var(--background);
-  color-scheme: light;
+  color-scheme: light dark;
 }
 
 body {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { lockScroll, unlockScroll } from "@/lib/scrollLock";
 import Image from "next/image";
 import { X, Film, Star, MapPin, Calendar, Loader2 } from "lucide-react";
 
@@ -59,20 +60,31 @@ function FilmCard({ film }: { film: FilmItem }) {
 export default function PersonModal({ personId, onClose }: { personId: number; onClose: () => void }) {
   const [data, setData] = useState<PersonData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [tab, setTab] = useState<"directed" | "acted">("directed");
 
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", esc);
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", esc); document.body.style.overflow = ""; };
+    lockScroll();
+    return () => { window.removeEventListener("keydown", esc); unlockScroll(); };
   }, [onClose]);
 
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/person/${personId}`)
-      .then(r => r.json())
-      .then(d => { setData(d); setTab(d.directed?.length > 0 ? "directed" : "acted"); })
-      .finally(() => setLoading(false));
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d: PersonData) => {
+        if (cancelled) return;
+        setData(d);
+        setTab(d.directed?.length > 0 ? "directed" : "acted");
+      })
+      .catch(() => { if (!cancelled) setFetchError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [personId]);
 
   return (
@@ -83,8 +95,16 @@ export default function PersonModal({ personId, onClose }: { personId: number; o
         </button>
 
         {loading && (
-            <div className="flex h-64 items-center justify-center">
+          <div className="flex h-64 items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-[color:var(--muted)]" />
+          </div>
+        )}
+
+        {fetchError && (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-[color:var(--muted)]">
+            <Film className="w-10 h-10 opacity-40" />
+            <p className="text-sm">Nepodařilo se načíst informace o osobě.</p>
+            <button onClick={onClose} className="text-xs text-[color:var(--accent)] hover:underline">Zavřít</button>
           </div>
         )}
 
@@ -130,11 +150,15 @@ export default function PersonModal({ personId, onClose }: { personId: number; o
             )}
 
             {/* Film list */}
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-              {(tab === "directed" ? data.directed : data.acted).map(film => (
-                <FilmCard key={film.id} film={film} />
-              ))}
-            </div>
+            {data.directed.length === 0 && data.acted.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[color:var(--muted)]">Žádné filmy k zobrazení.</p>
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                {(tab === "directed" ? data.directed : data.acted).map(film => (
+                  <FilmCard key={film.id} film={film} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

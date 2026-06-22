@@ -23,16 +23,24 @@ export default function AppShell() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const id = window.requestIdleCallback(() => {
+      setVisited(() => ({ ai: true, tech: true, news: true, releases: true }));
+    }, { timeout: 4000 });
+    return () => window.cancelIdleCallback(id);
+  }, []);
+
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[color:var(--line)] bg-[color:var(--background)]/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-screen-2xl items-center gap-6 px-4 sm:px-6">
-          <span
-            className="flex-shrink-0 text-[0.9375rem] font-semibold tracking-[-0.02em] text-[color:var(--foreground)]"
+          <button
+            onClick={() => { setTab("ai"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            className="flex-shrink-0 text-[0.9375rem] font-semibold tracking-[-0.02em] text-[color:var(--foreground)] hover:text-[color:var(--accent)] transition-colors"
             style={{ fontFamily: "var(--font-serif), Georgia, serif" }}
           >
             Release
-          </span>
+          </button>
           <TabNav active={tab} onChange={setTab} />
         </div>
       </header>

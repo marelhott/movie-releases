@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Lora } from "next/font/google";
 import "./globals.css";
 
@@ -14,9 +14,27 @@ const lora = Lora({
   display: "swap",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://movie-releases.vercel.app";
+
+export const viewport: Viewport = {
+  themeColor: "#0f9f76",
+};
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Movie Releases",
   description: "Filmové novinky, trending tituly a nové releasy na jednom místě.",
+  openGraph: {
+    title: "Movie Releases",
+    description: "Filmové novinky, trending tituly a nové releasy na jednom místě.",
+    type: "website",
+    url: siteUrl,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Movie Releases",
+    description: "Filmové novinky, trending tituly a nové releasy na jednom místě.",
+  },
 };
 
 export default function RootLayout({

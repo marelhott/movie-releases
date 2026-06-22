@@ -18,6 +18,12 @@ function hasConfiguredKey(value: string | undefined) {
   return Boolean(value && !value.includes("your_") && !value.includes("here"));
 }
 
+function deterministicId(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+  return Math.abs(h) || 1;
+}
+
 function getTimestamp(value: string | null | undefined) {
   if (!value) return 0;
   const parsed = new Date(value).getTime();
@@ -255,8 +261,8 @@ async function normalise(entry: any): Promise<any | null> {
     const omdb = imdbCode ? await getCachedOMDB(imdbCode) : null;
 
     const poster = tmdb?.poster_path
-      ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}`
-      : ytsRaw?.large_cover_image ?? ytsRaw?.medium_cover_image ?? null;
+      ? `https://image.tmdb.org/t/p/w342${tmdb.poster_path}`
+      : ytsRaw?.medium_cover_image ?? ytsRaw?.large_cover_image ?? null;
 
     const backdrop = tmdb?.backdrop_path
       ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` : null;
@@ -288,7 +294,7 @@ async function normalise(entry: any): Promise<any | null> {
     );
 
     return {
-      id: tmdb?.id ?? Math.abs(Math.random() * 1e9 | 0),
+      id: tmdb?.id ?? deterministicId(imdbCode || `${entry._title}:${entry._year}`),
       imdb_code: imdbCode,
       title: ytsRaw?.title ?? tmdb?.original_title ?? entry._raw?.title ?? entry._title,
       czech_title: (tmdb?.title && tmdb.title !== (ytsRaw?.title ?? entry._title)) ? tmdb.title : null,
