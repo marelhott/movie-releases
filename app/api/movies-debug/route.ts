@@ -2,17 +2,16 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-async function fetchYTS(page = 1) {
+async function tryYTS(host: string) {
   try {
     const res = await fetch(
-      `https://yts.mx/api/v2/list_movies.json?sort_by=date_added&limit=50&page=${page}`,
-      { cache: "no-store" }
+      `https://${host}/api/v2/list_movies.json?sort_by=date_added&limit=5&page=1`,
+      { cache: "no-store", signal: AbortSignal.timeout(8000) }
     );
-    const text = await res.text();
-    const data = JSON.parse(text);
-    const movies = data.data?.movies ?? [];
-    return { status: res.status, count: movies.length, movies: movies.slice(0, 5).map((m: any) => ({ title: m.title, year: m.year })), raw_preview: text.slice(0, 200) };
-  } catch (e) { return { error: String(e) }; }
+    const data = await res.json();
+    const count = data.data?.movies?.length ?? 0;
+    return { ok: true, status: res.status, count, sample: data.data?.movies?.slice(0, 2).map((m: any) => ({ title: m.title, year: m.year })) };
+  } catch (e) { return { ok: false, error: String(e) }; }
 }
 
 async function fetchTMDB() {
@@ -26,6 +25,10 @@ async function fetchTMDB() {
 }
 
 export async function GET() {
-  const [yts1, tmdb] = await Promise.all([fetchYTS(1), fetchTMDB()]);
-  return NextResponse.json({ yts: yts1, tmdb_upcoming: tmdb });
+  const hosts = ["yts.mx", "yts.torrentbay.to", "yts.pm", "yts1.tv", "ww4.yts.nz"];
+  const [results, tmdb] = await Promise.all([
+    Promise.all(hosts.map(h => tryYTS(h).then(r => ({ host: h, ...r })))),
+    fetchTMDB(),
+  ]);
+  return NextResponse.json({ yts_mirrors: results, tmdb_upcoming: tmdb });
 }
