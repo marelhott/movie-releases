@@ -394,7 +394,7 @@ const getCachedMoviesPage = unstable_cache(
   async (page: number) => {
     return buildMoviesPage(page, false);
   },
-  ["movies-page-v7"],
+  ["movies-page-v8"],
   { revalidate: 1800 }
 );
 
@@ -412,16 +412,28 @@ function sceneReleaseTimestamp(movie: any): number {
   return dates.length > 0 ? Math.max(...dates) : 0;
 }
 
+// Good-quality online release: WEB-DL, WEBRip, BluRay, Remux
+const VOD_QUALITY_RE = /web[-.]?dl|webrip|blu[-.]?ray|bdrip|remux/i;
+
+function isGoodQualityRelease(raw: any): boolean {
+  const label = raw?.releaseName ?? raw?.label ?? "";
+  const quality = raw?.quality ?? "";
+  return VOD_QUALITY_RE.test(label) || VOD_QUALITY_RE.test(quality);
+}
+
+// Scene release date within last N days
+function isRecentSceneRelease(raw: any, days = 120): boolean {
+  const date = raw?.date;
+  if (!date) return true;
+  return Date.now() - new Date(date).getTime() < days * 24 * 60 * 60 * 1000;
+}
+
 async function buildMoviesPage(page: number, forceFresh: boolean) {
     const TODAY = new Date().toISOString().slice(0, 10);
-    const RECENT_YEAR = new Date().getFullYear() - 2; // 2024+
 
-    // Fetch 3 YTS pages + 4 TMDB upcoming pages to ensure enough fresh content
-    const [yts1, yts2, yts3, tmdbUpcoming, srrdb, predb, scnsrc] =
+    // YTS is blocked from Vercel — use scene sources + TMDB only
+    const [tmdbUpcoming, srrdb, predb, scnsrc] =
       await Promise.all([
-        fetchYTS(1, forceFresh),
-        fetchYTS(2, forceFresh),
-        fetchYTS(3, forceFresh),
         fetchTMDBSection("movie/upcoming", forceFresh),
         fetchSrrdb(),
         fetchPredb(),
@@ -433,22 +445,16 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
       _title: s.title, _year: s.year, _raw: s,
     });
 
-    const sceneEntries = [
-      ...srrdb.map((s: any) => toEntry(s, "srrdb")),
-      ...predb.map((s: any) => toEntry(s, "predb")),
-      ...scnsrc.map((s: any) => toEntry(s, "scnsrc")),
-    ];
+    // Only WEB-DL/WEBRip/BluRay releases from the last 120 days
+    const vodScene = [...srrdb, ...predb, ...scnsrc].filter(
+      (s: any) => isGoodQualityRelease(s) && isRecentSceneRelease(s)
+    );
 
-    const allYts = [...yts1, ...yts2, ...yts3];
-
-    // Pre-filter YTS/scene to recent years only — don't waste normalization budget on old uploads
-    const recentYts = allYts.filter((e: any) => (e._year ?? 0) >= RECENT_YEAR);
-    const recentScene = sceneEntries.filter((e: any) => (e._year ?? 0) >= RECENT_YEAR);
+    const sceneEntries = vodScene.map((s: any) => toEntry(s, s.source));
 
     const dedupedRaw = deduplicateRawEntries([
-      ...recentYts,
+      ...sceneEntries,
       ...tmdbUpcoming,
-      ...recentScene,
     ]);
 
     const normalised: any[] = [];
@@ -460,9 +466,9 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
 
     const deduped = deduplicate(normalised).filter(m => m.poster);
 
-    // VOD: recent movies (year >= 2024) with a download source
+    // VOD: has scene WEB/BluRay release
     const vod = deduped
-      .filter(m => hasDownloadRelease(m) && (m.year ?? 0) >= RECENT_YEAR)
+      .filter(hasDownloadRelease)
       .sort((a, b) => {
         const bySceneDate = sceneReleaseTimestamp(b) - sceneReleaseTimestamp(a);
         if (bySceneDate !== 0) return bySceneDate;
@@ -470,21 +476,21 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
       })
       .slice(0, MOVIES_PAGE_LIMIT);
 
-    // Upcoming: no download release AND release_date strictly in the future
+    // Upcoming: pure TMDB with future release date
     const upcomingMovies = deduped
       .filter(m => {
         if (hasDownloadRelease(m)) return false;
         const releaseDate = (m.date_added ?? "").slice(0, 10);
         return releaseDate > TODAY;
       })
-      .sort((a, b) => getTimestamp(a.date_added) - getTimestamp(b.date_added)) // soonest first
+      .sort((a, b) => getTimestamp(a.date_added) - getTimestamp(b.date_added))
       .slice(0, 30);
 
     return {
       vod,
       upcoming: upcomingMovies,
       page,
-      hasMore: false, // all data on page 1
+      hasMore: false,
       refreshedAt: forceFresh ? Date.now() : undefined,
     };
 }

@@ -69,7 +69,7 @@ export async function fetchSrrdb(): Promise<SceneRelease[]> {
         url: linkMatch?.[1] ?? null,
         releaseName: raw,
       });
-      if (items.length >= 20) break;
+      if (items.length >= 80) break;
     }
     return items;
   } catch { return []; }
@@ -106,7 +106,7 @@ export async function fetchPredb(): Promise<SceneRelease[]> {
         url: linkMatch?.[1] ?? null,
         releaseName: raw,
       });
-      if (items.length >= 20) break;
+      if (items.length >= 80) break;
     }
     return items;
   } catch { return []; }
@@ -143,7 +143,7 @@ export async function fetchScnsrcScene(): Promise<SceneRelease[]> {
         url: titleMatch[1] ?? null,
         releaseName: raw,
       });
-      if (items.length >= 15) break;
+      if (items.length >= 40) break;
     }
     return items;
   } catch { return []; }

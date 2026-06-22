@@ -183,7 +183,7 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
                 </div>
               )}
 
-              {/* Torrents */}
+              {/* Torrents (YTS) */}
               {movie.torrents?.length > 0 && (
                 <div className="mt-5">
                   <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Stáhnout z YTS</p>
@@ -207,7 +207,14 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
 
               {movie.releases?.length > 0 && (
                 <div className="mt-5">
-                  <p className="mb-1 text-xs uppercase tracking-wider text-[color:var(--muted)]">Releasy</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-wider text-[color:var(--muted)]">Scene releasy</p>
+                    <a href={`https://www.1337x.to/search/${encodeURIComponent(movie.title + " " + movie.year)}/1/`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded-lg bg-[color:var(--accent)]/10 px-2 py-1 text-[11px] font-medium text-[color:var(--accent)] hover:bg-[color:var(--accent)]/20 transition-colors">
+                      <ExternalLink className="w-3 h-3" /> Hledat torrent
+                    </a>
+                  </div>
                   <div className="divide-y divide-[color:var(--line)]">
                     {movie.releases.map((release, index) => (
                       <ReleaseCard key={`${release.source}-${release.label}-${index}`} release={release} />
