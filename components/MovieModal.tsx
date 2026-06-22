@@ -186,16 +186,21 @@ export default function MovieModal({ movie, onClose }: { movie: Movie; onClose: 
               {/* Torrents */}
               {movie.torrents?.length > 0 && (
                 <div className="mt-5">
-                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Dostupné kvality</p>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-[color:var(--muted)]">Stáhnout z YTS</p>
                   <div className="flex flex-wrap gap-2">
-                    {movie.torrents.map((t, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-3 py-1.5 text-xs text-[color:var(--foreground)]">
-                        <span className="font-bold text-[color:var(--accent)]">{t.quality}</span>
-                        <span className="text-[color:var(--muted)]">{t.type}</span>
-                        <span>{t.size}</span>
-                        <span className="text-green-500">▲ {t.seeds}</span>
-                      </div>
-                    ))}
+                    {movie.torrents.map((t, i) => {
+                      const slug = movie.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                      const ytsUrl = `https://yts.mx/movies/${slug}-${movie.year}`;
+                      return (
+                        <a key={i} href={ytsUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 rounded-lg border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/8 px-3 py-1.5 text-xs text-[color:var(--foreground)] transition-colors hover:bg-[color:var(--accent)]/15 hover:border-[color:var(--accent)]/60">
+                          <span className="font-bold text-[color:var(--accent)]">{t.quality}</span>
+                          <span className="text-[color:var(--muted)]">{t.type}</span>
+                          <span className="text-[color:var(--muted)]">{t.size}</span>
+                          {typeof t.seeds === "number" && <span className="text-green-500 font-medium">▲{t.seeds}</span>}
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
               )}
