@@ -8,8 +8,10 @@ async function fetchYTS(page = 1) {
       `https://yts.mx/api/v2/list_movies.json?sort_by=date_added&limit=50&page=${page}`,
       { cache: "no-store" }
     );
-    const data = await res.json();
-    return (data.data?.movies ?? []).map((m: any) => ({ title: m.title, year: m.year, imdb: m.imdb_code, cover: m.medium_cover_image }));
+    const text = await res.text();
+    const data = JSON.parse(text);
+    const movies = data.data?.movies ?? [];
+    return { status: res.status, count: movies.length, movies: movies.slice(0, 5).map((m: any) => ({ title: m.title, year: m.year })), raw_preview: text.slice(0, 200) };
   } catch (e) { return { error: String(e) }; }
 }
 
@@ -25,15 +27,5 @@ async function fetchTMDB() {
 
 export async function GET() {
   const [yts1, tmdb] = await Promise.all([fetchYTS(1), fetchTMDB()]);
-  const movies = Array.isArray(yts1) ? yts1 : [];
-  const recentYear = new Date().getFullYear() - 2;
-  const recent = movies.filter((m: any) => (m.year ?? 0) >= recentYear);
-  return NextResponse.json({
-    yts_total: movies.length,
-    yts_recent_count: recent.length,
-    yts_years: movies.slice(0, 20).map((m: any) => m.year),
-    yts_recent_sample: recent.slice(0, 5),
-    tmdb_upcoming: tmdb,
-    recent_year_cutoff: recentYear,
-  });
+  return NextResponse.json({ yts: yts1, tmdb_upcoming: tmdb });
 }
