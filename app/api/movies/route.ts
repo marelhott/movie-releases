@@ -32,30 +32,42 @@ function getTimestamp(value: string | null | undefined) {
 
 // ── Source fetchers ──────────────────────────────────────────────────────────
 
-async function fetchYTS(page = 1, fresh = false) {
+function tmdbEntry(m: any) {
+  return {
+    _source: "tmdb" as const, _imdb: null, _tmdb_id: m.id,
+    _title: m.original_title ?? m.title,
+    _year: m.release_date ? parseInt(m.release_date) : 0, _raw: m,
+  };
+}
+
+async function fetchTMDBSection(endpoint: string, fresh = false, numPages = 2) {
+  if (!hasConfiguredKey(getKeys().tmdb)) return [];
   try {
-    const res = await fetch(
-      `https://yts.mx/api/v2/list_movies.json?sort_by=date_added&limit=50&page=${page}`,
-      fresh ? { cache: "no-store" } : { next: { revalidate: 1800 } }
+    const pages = await Promise.all(
+      Array.from({ length: numPages }, (_, i) =>
+        fetch(`https://api.themoviedb.org/3/${endpoint}?api_key=${getKeys().tmdb}&language=cs&region=CZ&page=${i + 1}`,
+          fresh ? { cache: "no-store" } : { next: { revalidate: 3600 } }).then(r => r.json())
+      )
     );
-    const data = await res.json();
-    return (data.data?.movies ?? []).map((m: any) => ({
-      _source: "yts", _imdb: m.imdb_code, _title: m.title, _year: m.year, _raw: m,
-    }));
+    return pages.flatMap((d: any) => d.results ?? []).map(tmdbEntry);
   } catch { return []; }
 }
 
-async function fetchTMDBSection(endpoint: string, fresh = false) {
+// Filmy vydané v určitém date range — proxy pro "dostupné ke stažení"
+async function fetchTMDBDiscover(dateGte: string, dateLte: string, fresh = false, numPages = 3) {
   if (!hasConfiguredKey(getKeys().tmdb)) return [];
   try {
-    const pages = await Promise.all([1, 2].map(p =>
-      fetch(`https://api.themoviedb.org/3/${endpoint}?api_key=${getKeys().tmdb}&language=cs&region=CZ&page=${p}`,
-        fresh ? { cache: "no-store" } : { next: { revalidate: 3600 } }).then(r => r.json())
-    ));
-    return pages.flatMap((d: any) => d.results ?? []).map((m: any) => ({
-      _source: "tmdb", _imdb: null, _tmdb_id: m.id,
-      _title: m.original_title ?? m.title, _year: m.release_date ? parseInt(m.release_date) : 0, _raw: m,
-    }));
+    const pages = await Promise.all(
+      Array.from({ length: numPages }, (_, i) =>
+        fetch(
+          `https://api.themoviedb.org/3/discover/movie?api_key=${getKeys().tmdb}&language=cs` +
+          `&sort_by=popularity.desc&vote_count.gte=30` +
+          `&primary_release_date.gte=${dateGte}&primary_release_date.lte=${dateLte}&page=${i + 1}`,
+          fresh ? { cache: "no-store" } : { next: { revalidate: 3600 } }
+        ).then(r => r.json())
+      )
+    );
+    return pages.flatMap((d: any) => d.results ?? []).map(tmdbEntry);
   } catch { return []; }
 }
 
@@ -394,7 +406,7 @@ const getCachedMoviesPage = unstable_cache(
   async (page: number) => {
     return buildMoviesPage(page, false);
   },
-  ["movies-page-v8"],
+  ["movies-page-v9"],
   { revalidate: 1800 }
 );
 
@@ -431,10 +443,17 @@ function isRecentSceneRelease(raw: any, days = 120): boolean {
 async function buildMoviesPage(page: number, forceFresh: boolean) {
     const TODAY = new Date().toISOString().slice(0, 10);
 
-    // YTS is blocked from Vercel — use scene sources + TMDB only
-    const [tmdbUpcoming, srrdb, predb, scnsrc] =
+    // VOD window: movies released 45-365 days ago (post-theaters, likely on streaming)
+    const now = new Date();
+    const dateVodTo = new Date(now); dateVodTo.setDate(now.getDate() - 45);
+    const dateVodFrom = new Date(now); dateVodFrom.setDate(now.getDate() - 365);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+    // YTS blocked on Vercel — use TMDB discover for VOD + scene as enrichment signal
+    const [tmdbVod, tmdbUpcoming, srrdb, predb, scnsrc] =
       await Promise.all([
-        fetchTMDBSection("movie/upcoming", forceFresh),
+        fetchTMDBDiscover(fmt(dateVodFrom), fmt(dateVodTo), forceFresh, 3),
+        fetchTMDBSection("movie/upcoming", forceFresh, 3),
         fetchSrrdb(),
         fetchPredb(),
         fetchScnsrcScene(),
@@ -445,16 +464,16 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
       _title: s.title, _year: s.year, _raw: s,
     });
 
-    // Only WEB-DL/WEBRip/BluRay releases from the last 120 days
+    // Scene enrichment: any good-quality recent release boosts matching movies
     const vodScene = [...srrdb, ...predb, ...scnsrc].filter(
       (s: any) => isGoodQualityRelease(s) && isRecentSceneRelease(s)
     );
-
     const sceneEntries = vodScene.map((s: any) => toEntry(s, s.source));
 
     const dedupedRaw = deduplicateRawEntries([
-      ...sceneEntries,
-      ...tmdbUpcoming,
+      ...sceneEntries,  // scene first so source="srrdb/predb" is preferred
+      ...tmdbVod,       // TMDB recent releases for VOD
+      ...tmdbUpcoming,  // TMDB upcoming for upcoming section
     ]);
 
     const normalised: any[] = [];
@@ -466,20 +485,29 @@ async function buildMoviesPage(page: number, forceFresh: boolean) {
 
     const deduped = deduplicate(normalised).filter(m => m.poster);
 
-    // VOD: has scene WEB/BluRay release
+    // Track which TMDB IDs came from discover (VOD date window)
+    const vodDiscoverIds = new Set(tmdbVod.map((e: any) => e._tmdb_id));
+
+    // VOD: either has scene release OR is from the VOD date window
     const vod = deduped
-      .filter(hasDownloadRelease)
+      .filter(m => hasDownloadRelease(m) || vodDiscoverIds.has(m.id))
       .sort((a, b) => {
+        // Scene releases first (verified download), then by popularity/date
+        const aHasScene = hasDownloadRelease(a) ? 1 : 0;
+        const bHasScene = hasDownloadRelease(b) ? 1 : 0;
+        if (bHasScene !== aHasScene) return bHasScene - aHasScene;
         const bySceneDate = sceneReleaseTimestamp(b) - sceneReleaseTimestamp(a);
         if (bySceneDate !== 0) return bySceneDate;
         return getTimestamp(b.date_added) - getTimestamp(a.date_added);
       })
       .slice(0, MOVIES_PAGE_LIMIT);
 
-    // Upcoming: pure TMDB with future release date
+    const vodIds = new Set(vod.map((m: any) => m.id));
+
+    // Upcoming: future release date, not already in VOD
     const upcomingMovies = deduped
       .filter(m => {
-        if (hasDownloadRelease(m)) return false;
+        if (vodIds.has(m.id)) return false;
         const releaseDate = (m.date_added ?? "").slice(0, 10);
         return releaseDate > TODAY;
       })
